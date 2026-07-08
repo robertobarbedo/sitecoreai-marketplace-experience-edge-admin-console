@@ -12,7 +12,7 @@ const buttonVariants = cva(
     "shrink-0",
 
     // Typography
-    "text-md font-semibold",
+    "text-md font-bold rounded-xl",
 
     // Icon Styles
     "[&_svg]:pointer-events-none",
@@ -36,20 +36,20 @@ const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary-600 active:bg-primary-700",
         outline:
-          "border bg-backgrounds hover:bg-neutral-bg hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
-        ghost: "bg-transparent hover:bg-neutral-bg active:bg-neutral-bg-active",
+          "border border-border-muted bg-white text-on-surface hover:bg-surface-container dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+        ghost:
+          "text-on-surface-variant hover:bg-surface-container hover:text-on-surface active:bg-neutral-bg-active",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 min-w-10 px-4 rounded-4xl",
-        lg: "h-12 min-w-12 px-6 rounded-4xl",
-        sm: "h-8 min-w-8 px-3 rounded-4xl",
-        xs: "h-6 min-w-6 px-2 rounded-4xl text-xs [&>svg]:!w-[18px] [&>svg]:!h-[18px]",
-        icon: "size-10 rounded-full",
-        // New icon-specific sizes
-        "icon-lg": "size-12 rounded-full",
-        "icon-sm": "size-8 rounded-full",
-        "icon-xs": "size-6 rounded-full [&>svg]:!w-[18px] [&>svg]:!h-[18px]",
+        default: "h-10 min-w-10 px-4",
+        lg: "h-12 min-w-12 px-6",
+        sm: "h-8 min-w-8 px-3",
+        xs: "h-6 min-w-6 px-2 text-xs [&>svg]:!w-[18px] [&>svg]:!h-[18px]",
+        icon: "size-10",
+        "icon-lg": "size-12",
+        "icon-sm": "size-8",
+        "icon-xs": "size-6 [&>svg]:!w-[18px] [&>svg]:!h-[18px]",
       },
       colorScheme: {
         primary: "",
@@ -64,7 +64,7 @@ const buttonVariants = cva(
         variant: "default",
         colorScheme: "primary",
         class:
-          "bg-primary text-inverse-text hover:bg-primary-hover active:bg-primary-active",
+          "bg-primary text-on-primary shadow-lg shadow-primary/20 hover:opacity-90 active:bg-primary-active",
       },
       {
         variant: "default",

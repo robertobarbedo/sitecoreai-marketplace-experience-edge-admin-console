@@ -17,16 +17,14 @@ interface ConnectionGateProps {
 
 export function ConnectionGate({ onConfigure }: ConnectionGateProps) {
   return (
-    <div className="flex justify-center pt-16">
-      <Card style="outline" padding="lg" className="max-w-xl text-center">
+    <div className="w-full pt-16">
+      <Card style="outline" padding="lg" className="w-full text-center">
         <CardHeader className="items-center">
-          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary-bg text-primary-fg">
+          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-primary-bg text-primary-fg">
             <Icon path={mdiConnection} size={1} />
           </div>
-          <CardTitle className="text-lg">
-            Connect to Experience Edge
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
+          <CardTitle className="text-lg font-bold">Connect to Experience Edge</CardTitle>
+          <CardDescription className="text-text-subtle">
             This app manages webhooks, cache, and settings through the
             Experience Edge Admin API. Marketplace apps have no default access
             to this API, so you need an <strong>Edge administration
@@ -36,14 +34,19 @@ export function ConnectionGate({ onConfigure }: ConnectionGateProps) {
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-3">
           <Button onClick={onConfigure}>Configure credentials</Button>
-          <a
-            href="https://doc.sitecore.com/sai/en/developers/sitecoreai/experience-edge/experience-edge-apis/admin-rest-api.html"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary text-sm underline-offset-4 hover:underline"
-          >
-            Admin REST API documentation
-          </a>
+          <p className="max-w-2xl text-sm text-text-subtle">
+            <a
+              href="https://deploy.sitecorecloud.io/credentials/environment"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              Click here (ctrl + click) to create credentials for Edge administration
+            </a>{" "}
+            . In SitecoreAI Deploy, choose{" "}
+            <strong>Create credentials</strong>, then{" "}
+            <strong>Edge administration</strong>.
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -33,9 +33,9 @@ export const MODULES_PARENT_ID = "{08477468-D438-43D4-9D6A-6D84A611971C}";
  * Content tree paths where this app persists its settings
  */
 export const SETTINGS_PATHS = {
-  MODULE_FOLDER: "/sitecore/system/Modules/ExperienceEdgeConsole",
-  SETTINGS_ITEM: "/sitecore/system/Modules/ExperienceEdgeConsole/Settings",
+  MODULE_FOLDER: "/sitecore/system/Modules/ExperienceEdgeAdminConsole",
+  SETTINGS_ITEM: "/sitecore/system/Modules/ExperienceEdgeAdminConsole/Settings",
 } as const;
 
-export const MODULE_FOLDER_NAME = "ExperienceEdgeConsole";
+export const MODULE_FOLDER_NAME = "ExperienceEdgeAdminConsole";
 export const SETTINGS_ITEM_NAME = "Settings";

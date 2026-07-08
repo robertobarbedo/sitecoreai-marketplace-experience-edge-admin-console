@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { mdiCog, mdiLoading } from "@mdi/js";
 import { Icon } from "@/lib/icon";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Toast,
@@ -133,13 +132,15 @@ export default function FullscreenExtension() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-[1280px] p-8">
-        <div className="rounded-xl border border-danger bg-danger-bg p-6 text-danger-fg">
-          <h2 className="font-semibold mb-1">Failed to connect to Sitecore</h2>
-          <p className="text-sm">
-            The Marketplace SDK could not be initialized. Make sure this app is
-            opened from inside SitecoreAI. ({error.message})
-          </p>
+      <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
+        <div className="mx-auto max-w-[1280px]">
+          <div className="rounded-xl border border-danger bg-danger-bg p-6 text-danger-fg">
+            <h2 className="mb-1 font-bold">Failed to connect to Sitecore</h2>
+            <p className="text-sm">
+              The Marketplace SDK could not be initialized. Make sure this app is
+              opened from inside SitecoreAI. ({error.message})
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -147,10 +148,12 @@ export default function FullscreenExtension() {
 
   if (!isInitialized || loadingCredentials) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Icon path={mdiLoading} size={1} className="animate-spin" />
-          <span>Connecting to Sitecore&hellip;</span>
+      <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
+        <div className="mx-auto flex max-w-[1280px] items-center justify-center py-32">
+          <div className="flex items-center gap-3 text-text-subtle">
+            <Icon path={mdiLoading} size={1} className="animate-spin" />
+            <span>Connecting to Sitecore&hellip;</span>
+          </div>
         </div>
       </main>
     );
@@ -158,67 +161,69 @@ export default function FullscreenExtension() {
 
   return (
     <ToastProvider swipeDirection="right">
-      <main className="mx-auto max-w-[1280px] px-8 py-6">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Experience Edge Console</h1>
-            <p className="text-muted-foreground text-sm">
-              Manage webhooks, cache, and settings for this environment&apos;s
-              Experience Edge.
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Open credential settings"
-          >
-            <Icon path={mdiCog} />
-          </Button>
-        </header>
+      <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
+        <div className="mx-auto max-w-[1280px] space-y-5">
+          <header className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold text-on-surface">
+                Experience Edge Console
+              </h1>
+              <p className="text-[11px] text-text-subtle">
+                Manage webhooks, cache, and settings for this environment&apos;s
+                Experience Edge.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open credential settings"
+            >
+              <Icon path={mdiCog} />
+            </Button>
+          </header>
 
-        <Separator className="my-4" />
+          {!apiCredentials ? (
+            <ConnectionGate onConfigure={() => setSettingsOpen(true)} />
+          ) : (
+            <Tabs defaultValue="webhooks">
+              <TabsList>
+                <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+                <TabsTrigger value="cache">Cache</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+              <TabsContent value="webhooks">
+                <WebhooksTab
+                  credentials={apiCredentials}
+                  showToast={showToast}
+                  onAuthError={handleAuthError}
+                />
+              </TabsContent>
+              <TabsContent value="cache">
+                <CacheTab
+                  credentials={apiCredentials}
+                  showToast={showToast}
+                  onAuthError={handleAuthError}
+                />
+              </TabsContent>
+              <TabsContent value="settings">
+                <EdgeSettingsTab
+                  credentials={apiCredentials}
+                  showToast={showToast}
+                  onAuthError={handleAuthError}
+                />
+              </TabsContent>
+            </Tabs>
+          )}
 
-        {!apiCredentials ? (
-          <ConnectionGate onConfigure={() => setSettingsOpen(true)} />
-        ) : (
-          <Tabs defaultValue="webhooks">
-            <TabsList>
-              <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
-              <TabsTrigger value="cache">Cache</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-            </TabsList>
-            <TabsContent value="webhooks">
-              <WebhooksTab
-                credentials={apiCredentials}
-                showToast={showToast}
-                onAuthError={handleAuthError}
-              />
-            </TabsContent>
-            <TabsContent value="cache">
-              <CacheTab
-                credentials={apiCredentials}
-                showToast={showToast}
-                onAuthError={handleAuthError}
-              />
-            </TabsContent>
-            <TabsContent value="settings">
-              <EdgeSettingsTab
-                credentials={apiCredentials}
-                showToast={showToast}
-                onAuthError={handleAuthError}
-              />
-            </TabsContent>
-          </Tabs>
-        )}
-
-        <SettingsModal
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          initialClientId={credentials?.clientId ?? ""}
-          initialClientSecret={credentials?.clientSecret ?? ""}
-          onSave={handleSaveCredentials}
-        />
+          <SettingsModal
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            initialClientId={credentials?.clientId ?? ""}
+            initialClientSecret={credentials?.clientSecret ?? ""}
+            onSave={handleSaveCredentials}
+          />
+        </div>
       </main>
 
       <Toast

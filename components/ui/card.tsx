@@ -17,7 +17,7 @@ const cardVariants = cva(
       },
       style: {
         flat: "bg-body-bg border-transparent",
-        outline: "bg-body-bg border-border-color",
+        outline: "bg-white border-border-muted",
         filled: "bg-subtle-bg border-transparent",
       },
       padding: {

@@ -103,11 +103,31 @@
   --color-backgrounds: var(--background);
   --color-inverse-text: var(--inverse);
 
-  --rounded-4xl: 1rem;
+  --color-surface: #f9f9fb;
+  --color-surface-bright: #f9f9fb;
+  --color-surface-grey: #f1f1f4;
+  --color-surface-container: #edeef0;
+  --color-surface-container-low: #f3f3f5;
+  --color-on-surface: #1a1c1d;
+  --color-on-surface-variant: #484456;
+  --color-on-primary: #ffffff;
+  --color-border-muted: #e2e8f0;
+  --color-text-subtle: #64748b;
+
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  --spacing-margin-page: 2rem;
 }
 
-body {
-  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--background);
-  color: var(--foreground);
+@layer base {
+  body {
+    font-family: var(--font-family-sans);
+    background-color: var(--color-surface);
+    color: var(--color-on-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }

@@ -21,7 +21,7 @@ Deploy / Cloud Portal).
 
 - Credentials are entered in the app's settings dialog and persisted in the
   Sitecore content tree at
-  `/sitecore/system/Modules/ExperienceEdgeConsole/Settings` (JSON in the
+  `/sitecore/system/Modules/ExperienceEdgeAdminConsole/Settings` (JSON in the
   `Value` field), via the Marketplace SDK's authoring GraphQL.
   > ⚠️ Anyone with authoring access to `/sitecore/system/Modules` can read the
   > stored secret. This is the same tradeoff accepted by sibling marketplace

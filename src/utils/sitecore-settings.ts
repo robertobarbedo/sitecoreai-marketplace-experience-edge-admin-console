@@ -91,7 +91,7 @@ export async function saveEdgeCredentials(
     );
 
     if (!moduleFolder) {
-      throw new Error("Failed to create ExperienceEdgeConsole folder");
+      throw new Error("Failed to create ExperienceEdgeAdminConsole folder");
     }
   }
 

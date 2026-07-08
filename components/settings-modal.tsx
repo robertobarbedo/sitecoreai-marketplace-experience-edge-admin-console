@@ -99,10 +99,17 @@ export function SettingsModal({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edge administration credentials</DialogTitle>
-          <DialogDescription>
-            Enter the Client ID and Client Secret of an Edge administration
-            client for this environment. The credentials are stored in the
-            Sitecore content tree under /sitecore/system/Modules.
+          <DialogDescription asChild>
+            <div className="space-y-2">
+              <p>
+                Enter the Client ID and Client Secret of an Edge administration
+                client for this environment. The credentials are stored in the
+                Sitecore content tree under /sitecore/system/Modules.
+              </p>
+              <p>
+                No credentials are sent or stored outside of your organization.
+              </p>
+            </div>
           </DialogDescription>
         </DialogHeader>
 

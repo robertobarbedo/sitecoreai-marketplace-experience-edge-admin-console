@@ -109,8 +109,8 @@ export function WebhooksTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border-muted bg-white p-4">
+        <p className="text-sm text-text-subtle">
           Webhooks are invoked by Experience Edge when publishing completes or
           content is updated.
         </p>
@@ -133,18 +133,18 @@ export function WebhooksTab({
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+        <div className="flex items-center justify-center gap-2 py-16 text-text-subtle">
           <Icon path={mdiLoading} className="animate-spin" />
           Loading webhooks&hellip;
         </div>
       ) : webhooks.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-primary-bg text-primary-fg">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border-muted bg-white py-16 text-center">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-primary-bg text-primary-fg">
             <Icon path={mdiWebhook} size={1} />
           </div>
           <div>
-            <p className="font-medium">No webhooks yet</p>
-            <p className="text-muted-foreground text-sm">
+            <p className="font-bold">No webhooks yet</p>
+            <p className="text-sm text-text-subtle">
               Create a webhook to notify your systems when content is published.
             </p>
           </div>
