@@ -164,14 +164,24 @@ export default function FullscreenExtension() {
       <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
         <div className="mx-auto max-w-[1280px] space-y-5">
           <header className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-bold text-on-surface">
-                Experience Edge Console
-              </h1>
-              <p className="text-[11px] text-text-subtle">
-                Manage webhooks, cache, and settings for this environment&apos;s
-                Experience Edge.
-              </p>
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icon.svg"
+                alt=""
+                width={40}
+                height={40}
+                className="shrink-0"
+              />
+              <div>
+                <h1 className="text-lg font-bold text-on-surface">
+                  Experience Edge Console
+                </h1>
+                <p className="text-[11px] text-text-subtle">
+                  Manage webhooks, cache, and settings for this
+                  environment&apos;s Experience Edge.
+                </p>
+              </div>
             </div>
             <Button
               variant="ghost"
