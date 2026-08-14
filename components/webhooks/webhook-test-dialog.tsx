@@ -49,7 +49,10 @@ export function WebhookTestDialog({
             Calling {webhook.uri}&hellip;
           </div>
         ) : (
-          <div className="flex flex-col">
+          /* min-w-0: DialogContent is a grid, whose items default to
+             min-width:auto — without it the code blocks below push the dialog
+             wider than its max-w and spill past the rounded border. */
+          <div className="flex min-w-0 flex-col">
             <div
               className={
                 result.ok
@@ -85,7 +88,7 @@ export function WebhookTestDialog({
                   Sent body
                   {webhook.body ? "" : " (generated — this webhook has no body configured)"}
                 </h3>
-                <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
+                <pre className="max-h-48 w-full min-w-0 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs">
                   {result.requestBody}
                 </pre>
               </>
@@ -98,7 +101,7 @@ export function WebhookTestDialog({
                   Response body
                   {result.responseTruncated ? " (truncated)" : ""}
                 </h3>
-                <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
+                <pre className="max-h-48 w-full min-w-0 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs">
                   {result.responseBody || "(empty)"}
                 </pre>
               </>

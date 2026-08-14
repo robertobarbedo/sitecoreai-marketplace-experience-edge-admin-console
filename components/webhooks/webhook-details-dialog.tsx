@@ -38,7 +38,10 @@ export function WebhookDetailsDialog({
           <DialogTitle>{webhook.label || "Webhook"}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col">
+        {/* min-w-0: DialogContent is a grid, whose items default to
+            min-width:auto — without it the body block below pushes the dialog
+            wider than its max-w and spills past the rounded border. */}
+        <div className="flex min-w-0 flex-col">
           <DetailRow label="ID" value={<span className="font-mono text-xs">{webhook.id}</span>} />
           <DetailRow label="URI" value={<span className="font-mono text-xs">{webhook.uri}</span>} />
           <DetailRow label="Method" value={webhook.method} />
@@ -64,7 +67,7 @@ export function WebhookDetailsDialog({
             <>
               <Separator className="my-3" />
               <h3 className="mb-1 text-sm font-medium">Body</h3>
-              <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs">
+              <pre className="max-h-48 w-full min-w-0 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs">
                 {webhook.body}
               </pre>
             </>
