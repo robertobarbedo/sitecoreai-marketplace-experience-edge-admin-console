@@ -22,8 +22,12 @@ attempt runtime testing.** Verification is limited to:
 - All sibling folders under `C:\Marketplace` are reference material only —
   never modify them.
 - Credentials (Edge admin Client ID/Secret) are stored in the Sitecore
-  content tree at `/sitecore/system/Modules/ExperienceEdgeAdminConsole/Settings`,
-  JSON in the `Value` field (same pattern as publishing-center).
+  content tree at
+  `/sitecore/system/Modules/Marketplace/ExperienceEdgeAdminConsole/Settings`,
+  JSON in the `Value` field (same pattern as publishing-center). Loads fall
+  back to the legacy pre-Marketplace path (`LEGACY_SETTINGS_ITEM_PATH` in
+  constants.ts); saves always write the new path and ensure both the
+  Marketplace and module folders exist.
 - Browser → own Next.js `/api/edge/*` routes → OAuth token
   (`auth.sitecorecloud.io`, client_credentials, audience
   `https://api.sitecorecloud.io`) → Admin API

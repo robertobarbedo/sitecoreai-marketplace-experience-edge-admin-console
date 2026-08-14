@@ -1,6 +1,6 @@
 "use client";
 
-import { mdiPencil, mdiDelete, mdiEye } from "@mdi/js";
+import { mdiPencil, mdiDelete, mdiEye, mdiSend, mdiLoading } from "@mdi/js";
 import { Icon } from "@/lib/icon";
 import { Button } from "@/components/ui/button";
 import type { Webhook } from "@/src/types/edge";
@@ -8,8 +8,11 @@ import type { Webhook } from "@/src/types/edge";
 interface WebhookTableProps {
   webhooks: Webhook[];
   onView: (webhook: Webhook) => void;
+  onTest: (webhook: Webhook) => void;
   onEdit: (webhook: Webhook) => void;
   onDelete: (webhook: Webhook) => void;
+  /** Id of the webhook whose test call is in flight, if any. */
+  testingId?: string | null;
 }
 
 function formatDate(value?: string): string {
@@ -21,8 +24,10 @@ function formatDate(value?: string): string {
 export function WebhookTable({
   webhooks,
   onView,
+  onTest,
   onEdit,
   onDelete,
+  testingId,
 }: WebhookTableProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-border-muted bg-white">
@@ -76,6 +81,19 @@ export function WebhookTable({
                     aria-label={`View ${webhook.label}`}
                   >
                     <Icon path={mdiEye} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onTest(webhook)}
+                    disabled={testingId !== null && testingId !== undefined}
+                    title={`Send a ${webhook.method} to ${webhook.uri}`}
+                    aria-label={`Test ${webhook.label}`}
+                  >
+                    <Icon
+                      path={testingId === webhook.id ? mdiLoading : mdiSend}
+                      className={testingId === webhook.id ? "animate-spin" : ""}
+                    />
                   </Button>
                   <Button
                     variant="ghost"

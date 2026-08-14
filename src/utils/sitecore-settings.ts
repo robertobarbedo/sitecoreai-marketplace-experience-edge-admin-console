@@ -8,6 +8,8 @@ import {
   SITECORE_TEMPLATES,
   MODULES_PARENT_ID,
   SETTINGS_PATHS,
+  LEGACY_SETTINGS_ITEM_PATH,
+  MARKETPLACE_FOLDER_NAME,
   MODULE_FOLDER_NAME,
   SETTINGS_ITEM_NAME,
   DEFAULT_LANGUAGE,
@@ -32,38 +34,91 @@ export function hasCredentials(credentials: EdgeCredentials): boolean {
   return Boolean(credentials.clientId && credentials.clientSecret);
 }
 
+/** Reads and parses the credentials item at `path`; null if absent/unparsable. */
+async function readCredentialsItem(
+  client: ClientSDK,
+  sitecoreContextId: string,
+  path: string,
+  language: Language,
+): Promise<EdgeCredentials | null> {
+  const settingsItem = await queryItemByPath(
+    client,
+    sitecoreContextId,
+    path,
+    language,
+  );
+
+  const valueField = settingsItem?.fields?.nodes?.find(
+    (f) => f.name === "Value",
+  );
+  if (!valueField?.value) return null;
+
+  try {
+    // Merge with defaults so newly added fields always have a fallback value
+    return { ...DEFAULT_CREDENTIALS, ...JSON.parse(valueField.value) };
+  } catch {
+    return null;
+  }
+}
+
 export async function loadEdgeCredentials(
   client: ClientSDK,
   sitecoreContextId: string,
   language: Language = DEFAULT_LANGUAGE,
 ): Promise<EdgeCredentials> {
   try {
-    const settingsItem = await queryItemByPath(
-      client,
-      sitecoreContextId,
-      SETTINGS_PATHS.SETTINGS_ITEM,
-      language,
+    // Settings moved under /sitecore/system/Modules/Marketplace; fall back to
+    // the legacy location so existing installs keep their credentials. The
+    // next save writes to the new path.
+    return (
+      (await readCredentialsItem(
+        client,
+        sitecoreContextId,
+        SETTINGS_PATHS.SETTINGS_ITEM,
+        language,
+      )) ??
+      (await readCredentialsItem(
+        client,
+        sitecoreContextId,
+        LEGACY_SETTINGS_ITEM_PATH,
+        language,
+      )) ?? { ...DEFAULT_CREDENTIALS }
     );
-
-    if (settingsItem?.fields?.nodes) {
-      const valueField = settingsItem.fields.nodes.find(
-        (f) => f.name === "Value",
-      );
-      if (valueField?.value) {
-        try {
-          // Merge with defaults so newly added fields always have a fallback value
-          return { ...DEFAULT_CREDENTIALS, ...JSON.parse(valueField.value) };
-        } catch {
-          return { ...DEFAULT_CREDENTIALS };
-        }
-      }
-    }
-
-    return { ...DEFAULT_CREDENTIALS };
   } catch (error) {
     console.error("Error loading Edge credentials:", error);
     return { ...DEFAULT_CREDENTIALS };
   }
+}
+
+/** Ensures a folder item exists, creating it under `parentId` if missing. */
+async function ensureFolder(
+  client: ClientSDK,
+  sitecoreContextId: string,
+  path: string,
+  parentId: string,
+  name: string,
+  language: Language,
+) {
+  const existing = await queryItemByPath(
+    client,
+    sitecoreContextId,
+    path,
+    language,
+  );
+  if (existing) return existing;
+
+  const created = await createItem(
+    client,
+    sitecoreContextId,
+    parentId,
+    SITECORE_TEMPLATES.MODULE_FOLDER,
+    name,
+    language,
+  );
+  if (!created) {
+    throw new Error(`Failed to create ${name} folder`);
+  }
+  return created;
 }
 
 export async function saveEdgeCredentials(
@@ -72,28 +127,23 @@ export async function saveEdgeCredentials(
   credentials: Pick<EdgeCredentials, "clientId" | "clientSecret">,
   language: Language = DEFAULT_LANGUAGE,
 ): Promise<void> {
-  // 1. Ensure the module folder exists
-  let moduleFolder = await queryItemByPath(
+  // 1. Ensure /sitecore/system/Modules/Marketplace/ExperienceEdgeAdminConsole
+  const marketplaceFolder = await ensureFolder(
+    client,
+    sitecoreContextId,
+    SETTINGS_PATHS.MARKETPLACE_FOLDER,
+    MODULES_PARENT_ID,
+    MARKETPLACE_FOLDER_NAME,
+    language,
+  );
+  const moduleFolder = await ensureFolder(
     client,
     sitecoreContextId,
     SETTINGS_PATHS.MODULE_FOLDER,
+    marketplaceFolder.itemId,
+    MODULE_FOLDER_NAME,
     language,
   );
-
-  if (!moduleFolder) {
-    moduleFolder = await createItem(
-      client,
-      sitecoreContextId,
-      MODULES_PARENT_ID,
-      SITECORE_TEMPLATES.MODULE_FOLDER,
-      MODULE_FOLDER_NAME,
-      language,
-    );
-
-    if (!moduleFolder) {
-      throw new Error("Failed to create ExperienceEdgeAdminConsole folder");
-    }
-  }
 
   // 2. Ensure the Settings item exists
   let settingsItem = await queryItemByPath(

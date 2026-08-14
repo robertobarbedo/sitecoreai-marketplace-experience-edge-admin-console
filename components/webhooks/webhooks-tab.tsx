@@ -7,13 +7,18 @@ import { Button } from "@/components/ui/button";
 import { WebhookTable } from "./webhook-table";
 import { WebhookFormDialog } from "./webhook-form-dialog";
 import { WebhookDetailsDialog } from "./webhook-details-dialog";
+import { WebhookTestDialog } from "./webhook-test-dialog";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import {
   useEdgeApi,
   isInvalidCredentialsError,
   type EdgeApiCredentials,
 } from "@/src/utils/hooks/useEdgeApi";
-import type { Webhook, WebhookInput } from "@/src/types/edge";
+import type {
+  Webhook,
+  WebhookInput,
+  WebhookTestResult,
+} from "@/src/types/edge";
 
 interface WebhooksTabProps {
   credentials: EdgeApiCredentials;
@@ -38,6 +43,11 @@ export function WebhooksTab({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Webhook | null>(null);
+  const [testOpen, setTestOpen] = useState(false);
+  /** The webhook the result dialog describes — outlives the in-flight call. */
+  const [testWebhook, setTestWebhook] = useState<Webhook | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<WebhookTestResult | null>(null);
 
   const handleError = useCallback(
     (error: unknown, action: string) => {
@@ -90,6 +100,30 @@ export function WebhooksTab({
     } catch (error) {
       handleError(error, selected ? "update webhook" : "create webhook");
       throw error;
+    }
+  };
+
+  /**
+   * Fires the webhook's own URI/method/headers/body from the server. A non-2xx
+   * or unreachable endpoint comes back as a result, not a thrown error — the
+   * dialog is the report either way; only the call itself failing is a toast.
+   */
+  const handleTest = async (webhook: Webhook) => {
+    setTestWebhook(webhook);
+    setTestingId(webhook.id);
+    setTestResult(null);
+    setTestOpen(true);
+    try {
+      const result = await call<WebhookTestResult>(
+        `/webhooks/${encodeURIComponent(webhook.id)}/test`,
+        { method: "POST" },
+      );
+      setTestResult(result);
+    } catch (error) {
+      setTestOpen(false);
+      handleError(error, "test webhook");
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -162,10 +196,12 @@ export function WebhooksTab({
       ) : (
         <WebhookTable
           webhooks={webhooks}
+          testingId={testingId}
           onView={(w) => {
             setSelected(w);
             setDetailsOpen(true);
           }}
+          onTest={handleTest}
           onEdit={(w) => {
             setSelected(w);
             setFormOpen(true);
@@ -188,6 +224,15 @@ export function WebhooksTab({
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         webhook={selected}
+      />
+
+      <WebhookTestDialog
+        open={testOpen}
+        // Closing mid-flight would strand the result; the in-flight view has
+        // no controls, so just let it finish.
+        onOpenChange={(open) => !testingId && setTestOpen(open)}
+        webhook={testWebhook}
+        result={testResult}
       />
 
       <ConfirmDestructiveDialog
