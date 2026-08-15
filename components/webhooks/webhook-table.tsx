@@ -6,8 +6,6 @@ import {
   mdiEye,
   mdiSend,
   mdiLoading,
-  mdiCheckCircle,
-  mdiAlertCircle,
   mdiCancel,
 } from "@mdi/js";
 import { Icon } from "@/lib/icon";
