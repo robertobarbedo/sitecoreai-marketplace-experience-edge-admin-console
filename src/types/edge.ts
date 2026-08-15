@@ -62,7 +62,11 @@ export interface EdgeApiError {
     | "invalid_credentials"
     | "validation"
     | "edge_api_error"
-    | "upstream_unreachable";
+    | "upstream_unreachable"
+    /** The server has no EDGE_SECRET_ENCRYPTION_KEY, so secrets cannot be sealed. */
+    | "encryption_unavailable"
+    /** The stored secret could not be decrypted (key rotated, value tampered). */
+    | "secret_unreadable";
   status?: number;
   field?: string;
   detail?: string;

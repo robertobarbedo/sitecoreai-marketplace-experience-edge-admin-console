@@ -6,19 +6,40 @@ import {
   UpstreamUnreachableError,
   type EdgeCredentialPair,
 } from "./admin-client";
+import {
+  EncryptionUnavailableError,
+  SecretSealError,
+  resolveSecret,
+} from "./secret-crypto";
 
 export const CLIENT_ID_HEADER = "x-edge-client-id";
 export const CLIENT_SECRET_HEADER = "x-edge-client-secret";
 
-export function readCredentials(request: Request): EdgeCredentialPair | null {
+export type CredentialResult =
+  | { ok: true; credentials: EdgeCredentialPair }
+  | { ok: false; response: NextResponse };
+
+/**
+ * Reads the credential headers and unseals the client secret. The browser
+ * normally sends the sealed form; a plaintext secret (direct `curl`, or a
+ * legacy value being migrated) is accepted as-is.
+ */
+export function readCredentials(request: Request): CredentialResult {
   const clientId = request.headers.get(CLIENT_ID_HEADER);
   const clientSecret = request.headers.get(CLIENT_SECRET_HEADER);
 
   if (!clientId || !clientSecret) {
-    return null;
+    return { ok: false, response: missingCredentialsResponse() };
   }
 
-  return { clientId, clientSecret };
+  try {
+    return {
+      ok: true,
+      credentials: { clientId, clientSecret: resolveSecret(clientSecret) },
+    };
+  } catch (error) {
+    return { ok: false, response: secretErrorResponse(error) };
+  }
 }
 
 export function jsonError(
@@ -37,6 +58,18 @@ export function missingCredentialsResponse(): NextResponse {
   });
 }
 
+/** Maps sealing/unsealing failures to a JSON error response. */
+export function secretErrorResponse(error: unknown): NextResponse {
+  if (error instanceof EncryptionUnavailableError) {
+    console.error("Secret encryption unavailable:", error.message);
+    return jsonError("encryption_unavailable", 500, { detail: error.message });
+  }
+  if (error instanceof SecretSealError) {
+    return jsonError("secret_unreadable", 400, { detail: error.message });
+  }
+  throw error;
+}
+
 /**
  * Maps errors thrown by edgeFetch/readEdgeResponse to a JSON error response.
  */
@@ -52,6 +85,12 @@ export function edgeErrorResponse(error: unknown): NextResponse {
       status: error.status,
       detail: error.detail,
     });
+  }
+  if (
+    error instanceof EncryptionUnavailableError ||
+    error instanceof SecretSealError
+  ) {
+    return secretErrorResponse(error);
   }
 
   console.error("Unexpected Edge API error:", error);

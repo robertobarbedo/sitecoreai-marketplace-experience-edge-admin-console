@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { edgeFetch, readEdgeResponse } from "@/src/lib/edge/admin-client";
 import {
   readCredentials,
-  missingCredentialsResponse,
   edgeErrorResponse,
   jsonError,
 } from "@/src/lib/edge/request";
 import type { Webhook, WebhookInput } from "@/src/types/edge";
 
 export async function GET(request: Request) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   try {
     const response = await edgeFetch(credentials, "/webhooks", {
@@ -26,10 +26,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   let input: WebhookInput;
   try {

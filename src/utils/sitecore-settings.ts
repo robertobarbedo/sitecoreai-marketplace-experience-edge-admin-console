@@ -16,22 +16,73 @@ import {
   type Language,
 } from "@/src/constants";
 
+/** Current storage format: the client secret is persisted sealed, never in plaintext. */
+export const CREDENTIALS_VERSION = 2;
+
 export interface EdgeCredentials {
   version: number;
   clientId: string;
-  clientSecret: string;
+  /**
+   * AES-GCM sealed client secret, as produced by the server (`v1.…`). It is
+   * opaque to the browser: it can be sent back to the app's own API routes,
+   * but it can never be turned back into the secret here.
+   */
+  secretCipher: string;
   updatedAt: string;
+  /**
+   * Plaintext secret read from a pre-encryption (version 1) settings item.
+   * Only ever set while a migration to `secretCipher` is pending.
+   */
+  legacySecret?: string;
 }
 
 const DEFAULT_CREDENTIALS: EdgeCredentials = {
-  version: 1,
+  version: CREDENTIALS_VERSION,
   clientId: "",
-  clientSecret: "",
+  secretCipher: "",
   updatedAt: "",
 };
 
 export function hasCredentials(credentials: EdgeCredentials): boolean {
-  return Boolean(credentials.clientId && credentials.clientSecret);
+  return Boolean(
+    credentials.clientId && (credentials.secretCipher || credentials.legacySecret),
+  );
+}
+
+/** True while a version 1 item still holds the secret in plaintext. */
+export function needsSecretMigration(credentials: EdgeCredentials): boolean {
+  return Boolean(credentials.legacySecret && !credentials.secretCipher);
+}
+
+/** The secret value to send to the API routes — sealed when available. */
+export function apiSecret(credentials: EdgeCredentials): string {
+  return credentials.secretCipher || credentials.legacySecret || "";
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** Normalizes a stored payload of either version into the current shape. */
+function parseCredentials(raw: string): EdgeCredentials | null {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const secretCipher = asString(parsed.secretCipher);
+  // Version 1 stored the secret in the clear under `clientSecret`.
+  const legacySecret = asString(parsed.clientSecret);
+
+  return {
+    version: secretCipher ? CREDENTIALS_VERSION : 1,
+    clientId: asString(parsed.clientId),
+    secretCipher,
+    updatedAt: asString(parsed.updatedAt),
+    ...(secretCipher ? {} : legacySecret ? { legacySecret } : {}),
+  };
 }
 
 /** Reads and parses the credentials item at `path`; null if absent/unparsable. */
@@ -53,12 +104,7 @@ async function readCredentialsItem(
   );
   if (!valueField?.value) return null;
 
-  try {
-    // Merge with defaults so newly added fields always have a fallback value
-    return { ...DEFAULT_CREDENTIALS, ...JSON.parse(valueField.value) };
-  } catch {
-    return null;
-  }
+  return parseCredentials(valueField.value);
 }
 
 export async function loadEdgeCredentials(
@@ -121,10 +167,16 @@ async function ensureFolder(
   return created;
 }
 
+/**
+ * Persists the credentials. `secretCipher` must already be sealed by the
+ * server (`POST /api/edge/validate`) — this function never sees, and the
+ * content tree never holds, the plaintext secret. Writing the whole `Value`
+ * field also erases any plaintext left by a version 1 install.
+ */
 export async function saveEdgeCredentials(
   client: ClientSDK,
   sitecoreContextId: string,
-  credentials: Pick<EdgeCredentials, "clientId" | "clientSecret">,
+  credentials: Pick<EdgeCredentials, "clientId" | "secretCipher">,
   language: Language = DEFAULT_LANGUAGE,
 ): Promise<void> {
   // 1. Ensure /sitecore/system/Modules/Marketplace/ExperienceEdgeAdminConsole
@@ -170,9 +222,9 @@ export async function saveEdgeCredentials(
 
   // 3. Update the Value field with the credentials JSON
   const value: EdgeCredentials = {
-    version: 1,
+    version: CREDENTIALS_VERSION,
     clientId: credentials.clientId,
-    clientSecret: credentials.clientSecret,
+    secretCipher: credentials.secretCipher,
     updatedAt: new Date().toISOString(),
   };
 

@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mdiEye, mdiEyeOff, mdiCheckCircle, mdiAlertCircle, mdiLoading } from "@mdi/js";
+import {
+  mdiEye,
+  mdiEyeOff,
+  mdiCheckCircle,
+  mdiAlertCircle,
+  mdiLoading,
+  mdiLock,
+} from "@mdi/js";
 import { Icon } from "@/lib/icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,25 +26,47 @@ interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialClientId: string;
-  initialClientSecret: string;
-  onSave: (credentials: { clientId: string; clientSecret: string }) => Promise<void>;
+  /** True when an encrypted secret is already stored for this environment. */
+  hasStoredSecret: boolean;
+  /**
+   * The stored secret in its sealed form. Opaque here — it is only forwarded
+   * to the server so the user can re-test or keep the existing secret without
+   * typing it again. The plaintext is never available to this component.
+   */
+  storedSecret: string;
+  /** ISO timestamp of the last credential save, if any. */
+  secretUpdatedAt?: string;
+  onSave: (credentials: {
+    clientId: string;
+    secretCipher: string;
+  }) => Promise<void>;
 }
 
 type TestState =
   | { status: "idle" }
   | { status: "testing" }
-  | { status: "valid" }
+  | { status: "valid"; sealedSecret: string }
   | { status: "invalid"; message: string };
+
+function formatUpdatedAt(iso?: string): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+}
 
 export function SettingsModal({
   open,
   onOpenChange,
   initialClientId,
-  initialClientSecret,
+  hasStoredSecret,
+  storedSecret,
+  secretUpdatedAt,
   onSave,
 }: SettingsModalProps) {
   const [clientId, setClientId] = useState(initialClientId);
-  const [clientSecret, setClientSecret] = useState(initialClientSecret);
+  // Always starts empty: the stored secret is encrypted and is never rendered
+  // back into the form.
+  const [newSecret, setNewSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [test, setTest] = useState<TestState>({ status: "idle" });
   const [saving, setSaving] = useState(false);
@@ -46,42 +75,60 @@ export function SettingsModal({
   useEffect(() => {
     if (open) {
       setClientId(initialClientId);
-      setClientSecret(initialClientSecret);
+      setNewSecret("");
       setShowSecret(false);
       setTest({ status: "idle" });
       setSaving(false);
     }
-  }, [open, initialClientId, initialClientSecret]);
+  }, [open, initialClientId]);
 
-  const canTest = clientId.trim() !== "" && clientSecret.trim() !== "";
+  const keepingStoredSecret = hasStoredSecret && newSecret.trim() === "";
+  const canTest =
+    clientId.trim() !== "" && (newSecret.trim() !== "" || keepingStoredSecret);
   const canSave = test.status === "valid" && !saving;
+  const updatedAt = formatUpdatedAt(secretUpdatedAt);
 
   const handleTest = async () => {
     setTest({ status: "testing" });
     const result = await validateEdgeCredentials({
       clientId: clientId.trim(),
-      clientSecret: clientSecret.trim(),
+      clientSecret: keepingStoredSecret ? storedSecret : newSecret.trim(),
     });
+
     if (result.ok) {
-      setTest({ status: "valid" });
-    } else {
-      setTest({
-        status: "invalid",
-        message:
-          result.error === "invalid_credentials"
-            ? "The Client ID or Client Secret is not valid for this environment."
-            : result.detail || "Could not reach the Experience Edge Admin API.",
-      });
+      setTest({ status: "valid", sealedSecret: result.sealedSecret });
+      return;
     }
+
+    let message: string;
+    switch (result.error) {
+      case "invalid_credentials":
+        message = "The Client ID or Client Secret is not valid for this environment.";
+        break;
+      case "secret_unreadable":
+        message =
+          "The stored secret could not be decrypted. Enter the Client Secret again to replace it.";
+        break;
+      case "encryption_unavailable":
+        message =
+          "Secret encryption is not configured on the server (EDGE_SECRET_ENCRYPTION_KEY). Credentials cannot be saved until an administrator sets it.";
+        break;
+      default:
+        message = result.detail || "Could not reach the Experience Edge Admin API.";
+    }
+    setTest({ status: "invalid", message });
   };
 
   const handleSave = async () => {
+    if (test.status !== "valid") return;
     setSaving(true);
     try {
       await onSave({
         clientId: clientId.trim(),
-        clientSecret: clientSecret.trim(),
+        secretCipher: test.sealedSecret,
       });
+      // Drop the plaintext from component state as soon as it is stored.
+      setNewSecret("");
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -103,8 +150,9 @@ export function SettingsModal({
             <div className="space-y-2">
               <p>
                 Enter the Client ID and Client Secret of an Edge administration
-                client for this environment. The credentials are stored in the
-                Sitecore content tree under /sitecore/system/Modules.
+                client for this environment. The secret is encrypted on the
+                server before it is stored in the Sitecore content tree under
+                /sitecore/system/Modules, and is never shown again.
               </p>
               <p>
                 No credentials are sent or stored outside of your organization.
@@ -138,12 +186,17 @@ export function SettingsModal({
               <Input
                 id="edge-client-secret"
                 type={showSecret ? "text" : "password"}
-                value={clientSecret}
+                value={newSecret}
                 autoComplete="off"
                 onChange={(e) => {
-                  setClientSecret(e.target.value);
+                  setNewSecret(e.target.value);
                   invalidateTest();
                 }}
+                placeholder={
+                  hasStoredSecret
+                    ? "Leave blank to keep the stored secret"
+                    : "Paste the client secret"
+                }
                 className="pr-10"
               />
               <button
@@ -155,6 +208,16 @@ export function SettingsModal({
                 <Icon path={showSecret ? mdiEyeOff : mdiEye} size={0.8} />
               </button>
             </div>
+            {hasStoredSecret && (
+              <p className="flex items-start gap-1.5 text-xs text-text-subtle">
+                <Icon path={mdiLock} size={0.6} className="mt-0.5 shrink-0" />
+                <span>
+                  A client secret is stored encrypted
+                  {updatedAt ? ` (last updated ${updatedAt})` : ""} and cannot be
+                  displayed. Type a new secret to replace it.
+                </span>
+              </p>
+            )}
           </div>
 
           {test.status === "valid" && (
@@ -164,8 +227,8 @@ export function SettingsModal({
             </div>
           )}
           {test.status === "invalid" && (
-            <div className="flex items-center gap-2 text-danger-fg text-sm">
-              <Icon path={mdiAlertCircle} size={0.8} />
+            <div className="flex items-start gap-2 text-danger-fg text-sm">
+              <Icon path={mdiAlertCircle} size={0.8} className="mt-0.5 shrink-0" />
               {test.message}
             </div>
           )}

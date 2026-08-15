@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { edgeFetch, readEdgeResponse } from "@/src/lib/edge/admin-client";
 import {
   readCredentials,
-  missingCredentialsResponse,
   edgeErrorResponse,
 } from "@/src/lib/edge/request";
 
 /** Removes ALL environment data from Experience Edge. Destructive. */
 export async function DELETE(request: Request) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   try {
     const response = await edgeFetch(credentials, "/content", {

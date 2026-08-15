@@ -28,6 +28,13 @@ attempt runtime testing.** Verification is limited to:
   back to the legacy pre-Marketplace path (`LEGACY_SETTINGS_ITEM_PATH` in
   constants.ts); saves always write the new path and ensure both the
   Marketplace and module folders exist.
+- The Client Secret is **sealed server-side** (AES-256-GCM, key from the
+  required `EDGE_SECRET_ENCRYPTION_KEY` env var — see
+  `src/lib/edge/secret-crypto.ts`). Only the ciphertext reaches the content
+  tree, the browser, and the `x-edge-client-secret` header; the settings
+  dialog never prefills or reveals it. Stored payload is `version: 2`
+  (`secretCipher`); `version: 1` plaintext items are migrated on load.
+  Never add a plaintext fallback — missing key must fail the save.
 - Browser → own Next.js `/api/edge/*` routes → OAuth token
   (`auth.sitecorecloud.io`, client_credentials, audience
   `https://api.sitecorecloud.io`) → Admin API

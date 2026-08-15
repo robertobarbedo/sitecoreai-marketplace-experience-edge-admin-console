@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { edgeFetch, readEdgeResponse } from "@/src/lib/edge/admin-client";
 import {
   readCredentials,
-  missingCredentialsResponse,
   edgeErrorResponse,
   jsonError,
 } from "@/src/lib/edge/request";
@@ -39,10 +38,11 @@ function defaultTestBody(webhook: Webhook): string {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   const { id } = await context.params;
 

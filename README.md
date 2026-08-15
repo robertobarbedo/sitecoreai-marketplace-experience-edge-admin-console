@@ -24,9 +24,8 @@ Deploy / Cloud Portal).
   `/sitecore/system/Modules/Marketplace/ExperienceEdgeAdminConsole/Settings`
   (JSON in the `Value` field), via the Marketplace SDK's authoring GraphQL.
   Loads fall back to the legacy pre-Marketplace path if the new one is empty.
-  > ⚠️ Anyone with authoring access to `/sitecore/system/Modules` can read the
-  > stored secret. This is the same tradeoff accepted by sibling marketplace
-  > modules that store settings in the content tree.
+- **The Client Secret is encrypted and write-only** — see
+  [Client Secret encryption](#client-secret-encryption) below.
 - The browser never calls `auth.sitecorecloud.io` or the Admin API directly
   (they are not CORS-enabled). All calls go through this app's own Next.js
   API routes (`/api/edge/*`), which exchange the credentials for an OAuth
@@ -34,11 +33,49 @@ Deploy / Cloud Portal).
   and proxy the request. Tokens are cached in server memory until shortly
   before expiry and are never returned to the browser.
 
+### Client Secret encryption
+
+The Client Secret is only ever in plaintext on the server, at the moment the
+user types it into the settings dialog:
+
+1. The dialog posts the typed secret to `POST /api/edge/validate`.
+2. The server validates it against Experience Edge and returns it **sealed** —
+   AES-256-GCM, key derived with HKDF-SHA256 from `EDGE_SECRET_ENCRYPTION_KEY`
+   (format: `v1.<iv>.<tag>.<ciphertext>`, base64url).
+3. Only that sealed string is written to the `Settings` item and kept in
+   browser memory; it is what every later call sends in
+   `x-edge-client-secret`. The server unseals it per request.
+
+Consequences, by design:
+
+- The stored value is useless to anyone reading the content tree (or a
+  serialized/packaged item) without the deployment's encryption key.
+- **The secret cannot be retrieved through the UI.** The settings dialog never
+  prefills it and has no way to reveal it — it only shows that a secret is
+  stored and when it was last updated. Editing the Client ID alone is still
+  possible: leave the secret field blank to keep the stored one; typing a value
+  replaces it.
+- `EDGE_SECRET_ENCRYPTION_KEY` is **required**. If it is missing, saving
+  credentials fails with `encryption_unavailable` rather than falling back to
+  plaintext storage.
+- Changing the key invalidates every stored secret (`secret_unreadable`); the
+  app then prompts the user to enter the credentials again.
+- Settings items written before this change (`version: 1`, plaintext
+  `clientSecret`) are migrated automatically on first load: the secret is
+  sealed and the item rewritten as `version: 2`, which erases the plaintext.
+
 ## Getting started
 
 ```bash
 npm install
 npm run dev
+```
+
+Set `EDGE_SECRET_ENCRYPTION_KEY` in `.env.local` (and in the hosting
+environment) — copy `.env.example` and generate a value with:
+
+```bash
+openssl rand -base64 32
 ```
 
 The app is served at the root route (`/`) but cannot be used directly in a
@@ -68,7 +105,7 @@ All routes read the credentials from the `x-edge-client-id` /
 
 | Route | Methods | Purpose |
 |---|---|---|
-| `/api/edge/validate` | POST | Validate credentials (token + `GET /settings`) |
+| `/api/edge/validate` | POST | Validate credentials (token + `GET /settings`), returns the sealed secret |
 | `/api/edge/webhooks` | GET, POST | List / create webhooks |
 | `/api/edge/webhooks/[id]` | GET, PUT, DELETE | Read / update / delete a webhook |
 | `/api/edge/cache` | DELETE | Clear the delivery cache |
@@ -76,10 +113,11 @@ All routes read the credentials from the `x-edge-client-id` /
 | `/api/edge/settings` | GET, PUT | Read / update environment settings |
 
 Error responses use a typed JSON shape:
-`{ "error": "invalid_credentials" | "validation" | "edge_api_error" | "upstream_unreachable" | "missing_credentials", ... }`.
+`{ "error": "invalid_credentials" | "validation" | "edge_api_error" | "upstream_unreachable" | "missing_credentials" | "encryption_unavailable" | "secret_unreadable", ... }`.
 
 The routes have no Marketplace SDK dependency, so you can exercise them
-locally with `curl` using a real Edge admin client:
+locally with `curl` using a real Edge admin client — the secret header accepts
+either a sealed value (what the app sends) or plaintext:
 
 ```bash
 curl -H "x-edge-client-id: <id>" -H "x-edge-client-secret: <secret>" \

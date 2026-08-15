@@ -5,6 +5,10 @@ import type { EdgeApiError } from "@/src/types/edge";
 
 export interface EdgeApiCredentials {
   clientId: string;
+  /**
+   * The sealed client secret. The browser never holds the plaintext after the
+   * settings dialog is submitted — the server unseals it per request.
+   */
   clientSecret: string;
 }
 
@@ -26,7 +30,10 @@ export class EdgeApiClientError extends Error {
 
 export function isInvalidCredentialsError(error: unknown): boolean {
   return (
-    error instanceof EdgeApiClientError && error.code === "invalid_credentials"
+    error instanceof EdgeApiClientError &&
+    // An undecryptable stored secret needs the same fix as a rejected one:
+    // the user has to enter the credentials again.
+    (error.code === "invalid_credentials" || error.code === "secret_unreadable")
   );
 }
 
@@ -81,10 +88,17 @@ export function useEdgeApi(credentials: EdgeApiCredentials | null) {
 /**
  * Validates a credential pair against /api/edge/validate without requiring
  * the hook (used by the settings modal before credentials are committed).
+ *
+ * `clientSecret` may be plaintext (just typed by the user) or the sealed value
+ * of an already-stored secret. On success the server returns the sealed form,
+ * which is the only version the app persists or keeps in memory.
  */
 export async function validateEdgeCredentials(
   credentials: EdgeApiCredentials,
-): Promise<{ ok: true } | { ok: false; error: EdgeApiError["error"]; detail?: string }> {
+): Promise<
+  | { ok: true; sealedSecret: string }
+  | { ok: false; error: EdgeApiError["error"]; detail?: string }
+> {
   const response = await fetch("/api/edge/validate", {
     method: "POST",
     headers: {
@@ -94,7 +108,15 @@ export async function validateEdgeCredentials(
   });
 
   if (response.ok) {
-    return { ok: true };
+    const body = (await response.json()) as { sealedSecret?: string };
+    if (!body.sealedSecret) {
+      return {
+        ok: false,
+        error: "encryption_unavailable",
+        detail: "The server did not return an encrypted secret.",
+      };
+    }
+    return { ok: true, sealedSecret: body.sealedSecret };
   }
 
   let body: EdgeApiError | null = null;

@@ -23,9 +23,15 @@ import {
   loadEdgeCredentials,
   saveEdgeCredentials,
   hasCredentials,
+  needsSecretMigration,
+  apiSecret,
+  CREDENTIALS_VERSION,
   type EdgeCredentials,
 } from "@/src/utils/sitecore-settings";
-import type { EdgeApiCredentials } from "@/src/utils/hooks/useEdgeApi";
+import {
+  validateEdgeCredentials,
+  type EdgeApiCredentials,
+} from "@/src/utils/hooks/useEdgeApi";
 
 type ToastVariant = "default" | "success" | "error" | "warning";
 
@@ -89,15 +95,76 @@ export default function FullscreenExtension() {
     };
   }, [isInitialized, client, showToast]);
 
+  // Installs created before secrets were encrypted keep the plaintext in the
+  // content tree. Seal it on the server and rewrite the item, so the plaintext
+  // stops existing anywhere.
+  useEffect(() => {
+    if (!client || !contextId || !credentials) return;
+    if (!needsSecretMigration(credentials)) return;
+
+    let cancelled = false;
+    (async () => {
+      const { clientId, legacySecret } = credentials;
+      const result = await validateEdgeCredentials({
+        clientId,
+        clientSecret: legacySecret!,
+      });
+      if (cancelled) return;
+
+      if (!result.ok) {
+        showToast(
+          "Stored secret is not encrypted",
+          result.error === "encryption_unavailable"
+            ? "Set EDGE_SECRET_ENCRYPTION_KEY on the server so the stored client secret can be encrypted."
+            : "The stored credentials could not be re-validated, so they remain unencrypted. Re-enter them in Settings.",
+          "warning",
+        );
+        return;
+      }
+
+      try {
+        await saveEdgeCredentials(client, contextId, {
+          clientId,
+          secretCipher: result.sealedSecret,
+        });
+        if (cancelled) return;
+        setCredentials({
+          version: CREDENTIALS_VERSION,
+          clientId,
+          secretCipher: result.sealedSecret,
+          updatedAt: new Date().toISOString(),
+        });
+        showToast(
+          "Client secret encrypted",
+          "The stored credentials were upgraded to the encrypted format.",
+          "success",
+        );
+      } catch (err) {
+        console.error("Error encrypting stored credentials:", err);
+        if (!cancelled) {
+          showToast(
+            "Could not encrypt the stored secret",
+            "The settings item could not be rewritten. Re-enter the credentials in Settings.",
+            "warning",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, contextId, credentials, showToast]);
+
   const handleSaveCredentials = useCallback(
-    async (input: { clientId: string; clientSecret: string }) => {
+    async (input: { clientId: string; secretCipher: string }) => {
       if (!client || !contextId) return;
       try {
         await saveEdgeCredentials(client, contextId, input);
         setCredentials({
-          version: 1,
+          version: CREDENTIALS_VERSION,
           clientId: input.clientId,
-          clientSecret: input.clientSecret,
+          secretCipher: input.secretCipher,
           updatedAt: new Date().toISOString(),
         });
         showToast("Connected", "Credentials saved successfully.", "success");
@@ -123,9 +190,10 @@ export default function FullscreenExtension() {
     setSettingsOpen(true);
   }, [showToast]);
 
+  // The secret travels to our API routes sealed; the server unseals it.
   const apiCredentials: EdgeApiCredentials | null =
     credentials && hasCredentials(credentials)
-      ? { clientId: credentials.clientId, clientSecret: credentials.clientSecret }
+      ? { clientId: credentials.clientId, clientSecret: apiSecret(credentials) }
       : null;
 
   // ---- Render states ----
@@ -230,7 +298,9 @@ export default function FullscreenExtension() {
             open={settingsOpen}
             onOpenChange={setSettingsOpen}
             initialClientId={credentials?.clientId ?? ""}
-            initialClientSecret={credentials?.clientSecret ?? ""}
+            hasStoredSecret={Boolean(credentials && apiSecret(credentials))}
+            storedSecret={credentials ? apiSecret(credentials) : ""}
+            secretUpdatedAt={credentials?.updatedAt}
             onSave={handleSaveCredentials}
           />
         </div>

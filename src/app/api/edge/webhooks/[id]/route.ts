@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { edgeFetch, readEdgeResponse } from "@/src/lib/edge/admin-client";
 import {
   readCredentials,
-  missingCredentialsResponse,
   edgeErrorResponse,
   jsonError,
 } from "@/src/lib/edge/request";
@@ -11,10 +10,11 @@ import type { Webhook, WebhookInput } from "@/src/types/edge";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, context: RouteContext) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   const { id } = await context.params;
 
@@ -32,10 +32,11 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PUT(request: Request, context: RouteContext) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   const { id } = await context.params;
 
@@ -70,10 +71,11 @@ export async function PUT(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const credentials = readCredentials(request);
-  if (!credentials) {
-    return missingCredentialsResponse();
+  const auth = readCredentials(request);
+  if (!auth.ok) {
+    return auth.response;
   }
+  const credentials = auth.credentials;
 
   const { id } = await context.params;
 
