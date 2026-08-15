@@ -15,6 +15,19 @@ attempt runtime testing.** Verification is limited to:
 - Manual testing happens only inside SitecoreAI after the app is registered
   in Developer Studio (fullscreen extension point → the root route `/`)
 
+## Webhook run history
+
+Experience Edge has **no history endpoint**. The execution log rides on the
+webhook object itself: `lastRuns: [{ timestamp, success, message }]` plus
+`disabled` (Edge auto-disables after 10 consecutive failures; a run that does
+not answer within 30 s counts as failed). Order is undocumented, so
+`src/utils/webhook-runs.ts` sorts newest-first defensively. The details dialog
+re-GETs `/webhooks/{id}` on open because runs go stale while the list is held.
+Docs: [webhook objects](https://doc.sitecore.com/sai/en/developers/sitecoreai/experience-edge/webhook-objects/webhook-objects.html).
+
+Manual tests from this console call the endpoint directly and are **not**
+recorded in `lastRuns`.
+
 ## Project facts
 
 - Based on the marketplace starter kit; only the **fullscreen** extension

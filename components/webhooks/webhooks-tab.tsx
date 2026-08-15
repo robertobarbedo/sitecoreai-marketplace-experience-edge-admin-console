@@ -43,6 +43,9 @@ export function WebhooksTab({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Webhook | null>(null);
+  /** Record shown in the details dialog — re-read on open so runs are current. */
+  const [details, setDetails] = useState<Webhook | null>(null);
+  const [detailsRefreshing, setDetailsRefreshing] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   /** The webhook the result dialog describes — outlives the in-flight call. */
   const [testWebhook, setTestWebhook] = useState<Webhook | null>(null);
@@ -100,6 +103,35 @@ export function WebhooksTab({
     } catch (error) {
       handleError(error, selected ? "update webhook" : "create webhook");
       throw error;
+    }
+  };
+
+  /**
+   * Opens the details dialog on the record from the list, then re-reads the
+   * webhook by id. The configuration rarely changes, but `lastRuns` does — and
+   * a single GET is the only way to see the execution log Edge keeps.
+   */
+  const handleView = async (webhook: Webhook) => {
+    setSelected(webhook);
+    setDetails(webhook);
+    setDetailsOpen(true);
+    setDetailsRefreshing(true);
+    try {
+      const fresh = await call<Webhook>(
+        `/webhooks/${encodeURIComponent(webhook.id)}`,
+      );
+      setDetails(fresh);
+      // Keep the list's Last run column consistent with what the dialog shows.
+      setWebhooks((list) => list.map((w) => (w.id === fresh.id ? fresh : w)));
+    } catch (error) {
+      // Non-fatal: the dialog already shows the record from the list.
+      if (isInvalidCredentialsError(error)) {
+        onAuthError();
+      } else {
+        console.error("Error refreshing webhook details:", error);
+      }
+    } finally {
+      setDetailsRefreshing(false);
     }
   };
 
@@ -197,10 +229,7 @@ export function WebhooksTab({
         <WebhookTable
           webhooks={webhooks}
           testingId={testingId}
-          onView={(w) => {
-            setSelected(w);
-            setDetailsOpen(true);
-          }}
+          onView={handleView}
           onTest={handleTest}
           onEdit={(w) => {
             setSelected(w);
@@ -223,7 +252,8 @@ export function WebhooksTab({
       <WebhookDetailsDialog
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
-        webhook={selected}
+        webhook={details}
+        refreshing={detailsRefreshing}
       />
 
       <WebhookTestDialog

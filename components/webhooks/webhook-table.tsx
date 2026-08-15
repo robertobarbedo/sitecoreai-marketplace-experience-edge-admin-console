@@ -1,9 +1,23 @@
 "use client";
 
-import { mdiPencil, mdiDelete, mdiEye, mdiSend, mdiLoading } from "@mdi/js";
+import {
+  mdiPencil,
+  mdiDelete,
+  mdiEye,
+  mdiSend,
+  mdiLoading,
+  mdiCheckCircle,
+  mdiAlertCircle,
+  mdiCancel,
+} from "@mdi/js";
 import { Icon } from "@/lib/icon";
 import { Button } from "@/components/ui/button";
 import type { Webhook } from "@/src/types/edge";
+import {
+  summarizeRuns,
+  formatRelativeTime,
+  formatRunTime,
+} from "@/src/utils/webhook-runs";
 
 interface WebhookTableProps {
   webhooks: Webhook[];
@@ -19,6 +33,46 @@ function formatDate(value?: string): string {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+/**
+ * Health at a glance, from the execution log Experience Edge returns with the
+ * webhook: the outcome of the most recent run, plus how many failures are
+ * stacked up behind it (Edge disables a webhook at 10 in a row).
+ */
+function LastRunCell({ webhook }: { webhook: Webhook }) {
+  const { latest, consecutiveFailures, total } = summarizeRuns(webhook);
+
+  if (!latest) {
+    return (
+      <span className="text-text-subtle" title="Experience Edge has not logged a run yet">
+        No runs yet
+      </span>
+    );
+  }
+
+  const failed = !latest.success;
+  const when = formatRelativeTime(latest.timestamp) ?? formatRunTime(latest.timestamp);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span
+        className={`font-medium ${failed ? "text-danger-fg" : "text-success-fg"}`}
+        title={latest.message || formatRunTime(latest.timestamp)}
+      >
+        {failed ? "Failed" : "Succeeded"}
+      </span>
+      <span className="text-xs text-text-subtle" title={formatRunTime(latest.timestamp)}>
+        {when}
+        {consecutiveFailures > 1 && (
+          <span className="text-danger-fg">
+            {" "}
+            · {consecutiveFailures} of {total} in a row
+          </span>
+        )}
+      </span>
+    </div>
+  );
 }
 
 export function WebhookTable({
@@ -48,6 +102,9 @@ export function WebhookTable({
                 Execution mode
               </th>
               <th className="px-4 py-4 font-mono text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                Last run
+              </th>
+              <th className="px-4 py-4 font-mono text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                 Created
               </th>
               <th className="px-4 py-4 text-right font-mono text-xs font-bold uppercase tracking-wider text-on-surface-variant">
@@ -61,7 +118,20 @@ export function WebhookTable({
                 key={webhook.id}
                 className="border-b border-border-muted last:border-b-0 hover:bg-surface-container-low/60"
               >
-              <td className="px-4 py-3 font-medium">{webhook.label || "—"}</td>
+              <td className="px-4 py-3 font-medium">
+                <div className="flex flex-col gap-0.5">
+                  <span>{webhook.label || "—"}</span>
+                  {webhook.disabled && (
+                    <span
+                      className="inline-flex w-fit items-center gap-1 rounded-full bg-warning-bg px-2 py-0.5 text-xs font-semibold text-warning-fg"
+                      title="Experience Edge disabled this webhook after 10 consecutive failures"
+                    >
+                      <Icon path={mdiCancel} size={0.6} />
+                      Disabled
+                    </span>
+                  )}
+                </div>
+              </td>
               <td className="max-w-[320px] truncate px-4 py-3 font-mono text-xs" title={webhook.uri}>
                 {webhook.uri}
               </td>
@@ -71,6 +141,9 @@ export function WebhookTable({
                 </span>
               </td>
               <td className="px-4 py-3">{webhook.executionMode ?? "—"}</td>
+              <td className="px-4 py-3 whitespace-nowrap">
+                <LastRunCell webhook={webhook} />
+              </td>
               <td className="px-4 py-3 whitespace-nowrap">{formatDate(webhook.created)}</td>
               <td className="px-4 py-3">
                 <div className="flex justify-end gap-1">

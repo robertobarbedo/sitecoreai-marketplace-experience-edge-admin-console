@@ -3,7 +3,9 @@
 A Sitecore Marketplace app that provides a management console for the
 [Experience Edge Admin REST API](https://doc.sitecore.com/sai/en/developers/sitecoreai/experience-edge/experience-edge-apis/admin-rest-api.html):
 
-- **Webhooks** — list, create, edit, and delete Experience Edge webhooks
+- **Webhooks** — list, create, edit, test, and delete Experience Edge
+  webhooks, including the execution log (`lastRuns`) and auto-disabled state
+  that Edge returns with each webhook
 - **Cache** — clear the delivery cache or delete all published content
 - **Settings** — view and update cache TTLs and auto-clear flags
 

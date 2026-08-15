@@ -49,6 +49,18 @@ function toHeaderRows(headers?: Record<string, string>): HeaderRow[] {
   return Object.entries(headers).map(([key, value]) => ({ key, value }));
 }
 
+/** Empty counts as valid; otherwise Edge requires a JSON object. */
+function isJsonObject(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === "") return true;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
 export function WebhookFormDialog({
   open,
   onOpenChange,
@@ -61,6 +73,7 @@ export function WebhookFormDialog({
   const [executionMode, setExecutionMode] = useState<WebhookExecutionMode>("OnEnd");
   const [headers, setHeaders] = useState<HeaderRow[]>([]);
   const [body, setBody] = useState("");
+  const [bodyInclude, setBodyInclude] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -71,12 +84,19 @@ export function WebhookFormDialog({
       setExecutionMode(webhook?.executionMode ?? "OnEnd");
       setHeaders(toHeaderRows(webhook?.headers));
       setBody(webhook?.body ?? "");
+      setBodyInclude(webhook?.bodyInclude ?? "");
       setPending(false);
     }
   }, [open, webhook]);
 
+  // Experience Edge accepts `body` only for OnEnd and `bodyInclude` only for
+  // OnUpdate, so the form offers whichever the selected mode allows.
+  const usesBodyInclude = executionMode === "OnUpdate";
+  const bodyIncludeValid = !usesBodyInclude || isJsonObject(bodyInclude);
+
   const uriValid = uri.startsWith("https://");
-  const canSubmit = label.trim() !== "" && uriValid && !pending;
+  const canSubmit =
+    label.trim() !== "" && uriValid && bodyIncludeValid && !pending;
 
   const handleSubmit = async () => {
     setPending(true);
@@ -94,7 +114,9 @@ export function WebhookFormDialog({
         method,
         executionMode,
         headers: Object.keys(headerRecord).length ? headerRecord : undefined,
-        body: body.trim() || undefined,
+        ...(usesBodyInclude
+          ? { bodyInclude: bodyInclude.trim() || undefined }
+          : { body: body.trim() || undefined }),
       });
       onOpenChange(false);
     } catch {
@@ -237,19 +259,48 @@ export function WebhookFormDialog({
             ))}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="wh-body" className="text-sm font-medium">
-              Body <span className="text-muted-foreground font-normal">(optional)</span>
-            </label>
-            <Textarea
-              id="wh-body"
-              rows={4}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder='e.g. { "trigger": "publish" }'
-              className="font-mono text-xs"
-            />
-          </div>
+          {usesBodyInclude ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="wh-body-include" className="text-sm font-medium">
+                Body include{" "}
+                <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Textarea
+                id="wh-body-include"
+                rows={4}
+                value={bodyInclude}
+                onChange={(e) => setBodyInclude(e.target.value)}
+                placeholder='e.g. { "source": "experience-edge" }'
+                className="font-mono text-xs"
+                aria-invalid={!bodyIncludeValid}
+              />
+              <p
+                className={`text-xs ${bodyIncludeValid ? "text-muted-foreground" : "text-danger-fg"}`}
+              >
+                {bodyIncludeValid
+                  ? "A JSON object merged into the payload Experience Edge sends on each update."
+                  : "Must be a JSON object, e.g. { \"key\": \"value\" }."}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="wh-body" className="text-sm font-medium">
+                Body <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Textarea
+                id="wh-body"
+                rows={4}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder='e.g. { "trigger": "publish" }'
+                className="font-mono text-xs"
+              />
+              <p className="text-muted-foreground text-xs">
+                Sent as-is when publishing ends. Experience Edge only accepts a
+                body in OnEnd mode.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

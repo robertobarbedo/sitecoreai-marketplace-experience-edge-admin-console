@@ -86,6 +86,13 @@
   --color-danger-hover: var(--destructive-hover);
   --color-danger-active: var(--destructive-active);
 
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-foreground);
+  --color-warning-bg: var(--warning-background);
+  --color-warning-bg-active: var(--warning-background-active);
+  --color-warning-hover: var(--warning-hover);
+  --color-warning-active: var(--warning-active);
+
   --color-destructive: var(--destructive);
   --color-neutral: var(--neutral);
   --color-neutral-fg: var(--neutral-foreground);

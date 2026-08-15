@@ -12,8 +12,27 @@ export interface WebhookInput {
   uri: string;
   method: WebhookMethod;
   headers?: Record<string, string>;
+  /** Body to post. Experience Edge only populates it when executionMode is OnEnd. */
   body?: string;
+  /**
+   * Extra JSON object merged into the request body. Experience Edge only
+   * allows it when executionMode is OnUpdate.
+   */
+  bodyInclude?: string;
   executionMode?: WebhookExecutionMode;
+}
+
+/**
+ * One logged execution of a webhook. Experience Edge keeps the most recent
+ * runs on the webhook object itself (`lastRuns`) — there is no separate
+ * history endpoint.
+ */
+export interface WebhookRun {
+  /** When the execution log entry was created. */
+  timestamp?: string;
+  success?: boolean;
+  /** Error message; Edge only sets it for failed runs. */
+  message?: string;
 }
 
 export interface Webhook extends WebhookInput {
@@ -21,6 +40,14 @@ export interface Webhook extends WebhookInput {
   tenantId?: string;
   createdBy?: string;
   created?: string;
+  /** Results of the latest executions, newest-first once normalized. */
+  lastRuns?: WebhookRun[];
+  /**
+   * Experience Edge disables a webhook automatically after 10 consecutive
+   * failed executions (a run that does not answer within 30 seconds counts
+   * as failed).
+   */
+  disabled?: boolean;
 }
 
 /**
