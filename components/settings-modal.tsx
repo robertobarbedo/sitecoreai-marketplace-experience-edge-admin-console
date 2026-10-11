@@ -252,6 +252,10 @@ export function SettingsModal({
             Save
           </Button>
         </DialogFooter>
+
+        <p className="-mt-2 text-left text-[10px] text-text-subtle">
+          Developed by Roberto Barbedo
+        </p>
       </DialogContent>
     </Dialog>
   );
