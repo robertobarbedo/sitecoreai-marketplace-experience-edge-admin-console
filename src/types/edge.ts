@@ -93,7 +93,9 @@ export interface EdgeApiError {
     /** The server has no EDGE_SECRET_ENCRYPTION_KEY, so secrets cannot be sealed. */
     | "encryption_unavailable"
     /** The stored secret could not be decrypted (key rotated, value tampered). */
-    | "secret_unreadable";
+    | "secret_unreadable"
+    /** The caller's sign-in carries no Sitecore Cloud organization to bind secrets to. */
+    | "organization_unknown";
   status?: number;
   field?: string;
   detail?: string;

@@ -7,7 +7,7 @@ import {
 
 /** Clears the entire Experience Edge cache for the environment. */
 export async function DELETE(request: Request) {
-  const auth = readCredentials(request);
+  const auth = await readCredentials(request);
   if (!auth.ok) {
     return auth.response;
   }

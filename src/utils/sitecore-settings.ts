@@ -23,8 +23,9 @@ export interface EdgeCredentials {
   version: number;
   clientId: string;
   /**
-   * AES-GCM sealed client secret, as produced by the server (`v2.…`, bound
-   * to the client ID; older `v1.…` values are migrated on load). It is
+   * AES-GCM sealed client secret, as produced by the server (`v3.…`, bound
+   * to the organization and client ID; older `v1.`/`v2.` values cannot be
+   * migrated and have to be re-entered). It is
    * opaque to the browser: it can be sent back to the app's own API routes,
    * but it can never be turned back into the secret here.
    */
@@ -51,12 +52,13 @@ export function hasCredentials(credentials: EdgeCredentials): boolean {
 }
 
 /** Mirrors SEAL_VERSION in src/lib/edge/secret-crypto.ts. */
-const CURRENT_SEAL_PREFIX = "v2.";
+const CURRENT_SEAL_PREFIX = "v3.";
 
 /**
  * True while the stored secret is not in the current sealed format: a
- * version 1 item holding it in plaintext, or a cipher sealed before secrets
- * were bound to their client ID.
+ * version 1 item holding it in plaintext (re-sealed on load), or a cipher
+ * sealed before secrets were bound to their organization (rejected by the
+ * server, so the user is asked to re-enter it).
  */
 export function needsSecretMigration(credentials: EdgeCredentials): boolean {
   if (!credentials.clientId) return false;

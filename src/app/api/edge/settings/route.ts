@@ -8,7 +8,7 @@ import {
 import type { EdgeSettings } from "@/src/types/edge";
 
 export async function GET(request: Request) {
-  const auth = readCredentials(request);
+  const auth = await readCredentials(request);
   if (!auth.ok) {
     return auth.response;
   }
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = readCredentials(request);
+  const auth = await readCredentials(request);
   if (!auth.ok) {
     return auth.response;
   }

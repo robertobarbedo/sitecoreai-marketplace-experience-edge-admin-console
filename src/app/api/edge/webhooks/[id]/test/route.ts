@@ -46,7 +46,7 @@ function defaultTestBody(webhook: Webhook): string {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = readCredentials(request);
+  const auth = await readCredentials(request);
   if (!auth.ok) {
     return auth.response;
   }

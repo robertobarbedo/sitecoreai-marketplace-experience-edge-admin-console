@@ -20,13 +20,15 @@ const KEY_ENV = "EDGE_SECRET_ENCRYPTION_KEY";
 const MIN_KEY_LENGTH = 16;
 
 /**
- * Format marker; bump if the wire format ever changes. v2 binds the secret to
- * its client ID (GCM additional authenticated data), so a sealed secret only
- * opens next to the client ID it was sealed for.
+ * Format marker; bump if the wire format ever changes. v3 binds the secret to
+ * the Sitecore Cloud organization of the signed-in user and to its client ID
+ * (GCM additional authenticated data), so a sealed secret only opens for a
+ * caller of the same organization, next to the client ID it was sealed for.
+ * Earlier formats (v1 unbound, v2 bound to the client ID only) are no longer
+ * opened at all: migrating them would let anyone holding a copy re-seal it
+ * for their own organization, so the user enters the secret again instead.
  */
-const SEAL_VERSION = "v2";
-/** Unbound format written before 2026-10-24; only opened to migrate it. */
-const LEGACY_SEAL_VERSION = "v1";
+const SEAL_VERSION = "v3";
 const IV_BYTES = 12;
 const KEY_BYTES = 32;
 const HKDF_SALT = "sitecoreai-marketplace-experience-edge-console";
@@ -92,15 +94,23 @@ export function isSealed(value: string): boolean {
   return value.startsWith(`${SEAL_VERSION}.`);
 }
 
-function bindingData(clientId: string): Buffer {
-  return Buffer.from(clientId, "utf8");
+/** Identifies who a sealed secret belongs to. */
+export interface SecretBinding {
+  /** Verified `org_id` claim of the caller's Sitecore Cloud access token. */
+  organizationId: string;
+  clientId: string;
 }
 
-/** Encrypts a plaintext secret for one client ID into a self-describing, storable string. */
-export function sealSecret(plaintext: string, clientId: string): string {
+function bindingData({ organizationId, clientId }: SecretBinding): Buffer {
+  // JSON keeps the two values unambiguous whatever characters they contain.
+  return Buffer.from(JSON.stringify(["org", organizationId, "client", clientId]), "utf8");
+}
+
+/** Encrypts a plaintext secret for one organization and client ID into a self-describing, storable string. */
+export function sealSecret(plaintext: string, binding: SecretBinding): string {
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv("aes-256-gcm", getKey(), iv);
-  cipher.setAAD(bindingData(clientId));
+  cipher.setAAD(bindingData(binding));
   const ciphertext = Buffer.concat([
     cipher.update(plaintext, "utf8"),
     cipher.final(),
@@ -114,10 +124,17 @@ export function sealSecret(plaintext: string, clientId: string): string {
   ].join(".");
 }
 
-function openParts(sealed: string, version: string, aad: Buffer | null): string {
+/**
+ * Decrypts a value produced by {@link sealSecret} for the same organization
+ * and client ID. Plaintext and older formats are rejected — only the validate
+ * route accepts plaintext, to seal it.
+ */
+export function openSecret(sealed: string, binding: SecretBinding): string {
   const parts = sealed.split(".");
-  if (parts.length !== 4 || parts[0] !== version) {
-    throw new SecretSealError("The stored client secret is not in a readable format.");
+  if (parts.length !== 4 || parts[0] !== SEAL_VERSION) {
+    throw new SecretSealError(
+      "The stored client secret is in an older or unreadable format. Re-enter the credentials in Settings.",
+    );
   }
 
   const [, iv, tag, ciphertext] = parts;
@@ -128,7 +145,7 @@ function openParts(sealed: string, version: string, aad: Buffer | null): string 
       getKey(),
       Buffer.from(iv, "base64url"),
     );
-    if (aad) decipher.setAAD(aad);
+    decipher.setAAD(bindingData(binding));
     decipher.setAuthTag(Buffer.from(tag, "base64url"));
     return Buffer.concat([
       decipher.update(Buffer.from(ciphertext, "base64url")),
@@ -138,38 +155,32 @@ function openParts(sealed: string, version: string, aad: Buffer | null): string 
     if (error instanceof EncryptionUnavailableError) {
       throw error;
     }
-    // Wrong key, another client ID or a tampered payload — indistinguishable,
-    // and all mean the user has to enter the secret again.
+    // Wrong key, another organization or client ID, or a tampered payload —
+    // indistinguishable, and all mean the user has to enter the secret again.
     throw new SecretSealError(
-      "The stored client secret could not be decrypted. It was sealed with a different encryption key or for a different Client ID; re-enter the credentials.",
+      "The stored client secret could not be decrypted. It was sealed with a different encryption key, for another organization or for a different Client ID; re-enter the credentials.",
     );
   }
 }
 
 /**
- * Decrypts a value produced by {@link sealSecret} for `clientId`. Plaintext
- * and the unbound v1 format are rejected — only the validate route accepts
- * them, to seal them.
- */
-export function openSecret(sealed: string, clientId: string): string {
-  return openParts(sealed, SEAL_VERSION, bindingData(clientId));
-}
-
-/**
- * For the validate route: takes a secret the user just typed (plaintext), a
- * stored unbound v1 value being migrated, or a current v2 value, and returns
- * the plaintext (for the token exchange) plus the v2 form bound to
- * `clientId` (the only form that is ever returned to the browser).
+ * For the validate route: takes a secret the user just typed (plaintext) or a
+ * current sealed value of the same organization and client ID, and returns
+ * the plaintext (for the token exchange) plus the sealed form (the only form
+ * that is ever returned to the browser). Older sealed formats are rejected.
  */
 export function sealForClient(
   value: string,
-  clientId: string,
+  binding: SecretBinding,
 ): { plaintext: string; sealed: string } {
   if (isSealed(value)) {
-    return { plaintext: openSecret(value, clientId), sealed: value };
+    return { plaintext: openSecret(value, binding), sealed: value };
   }
-  const plaintext = value.startsWith(`${LEGACY_SEAL_VERSION}.`)
-    ? openParts(value, LEGACY_SEAL_VERSION, null)
-    : value;
-  return { plaintext, sealed: sealSecret(plaintext, clientId) };
+  if (/^v[12]\.[\w-]+\.[\w-]+\.[\w-]+$/.test(value)) {
+    // v1/v2 ciphertext is never re-sealed, see SEAL_VERSION.
+    throw new SecretSealError(
+      "The stored client secret was encrypted by an older version of the app. Re-enter the credentials in Settings.",
+    );
+  }
+  return { plaintext: value, sealed: sealSecret(value, binding) };
 }

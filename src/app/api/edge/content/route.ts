@@ -7,7 +7,7 @@ import {
 
 /** Removes ALL environment data from Experience Edge. Destructive. */
 export async function DELETE(request: Request) {
-  const auth = readCredentials(request);
+  const auth = await readCredentials(request);
   if (!auth.ok) {
     return auth.response;
   }
