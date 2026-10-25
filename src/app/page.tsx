@@ -1,0 +1,361 @@
+"use client";
+
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import type { ApplicationContext } from "@sitecore-marketplace-sdk/client";
+import { MarketplaceAuthProvider } from "@/src/lib/marketplace-auth/AuthProvider";
+import { mdiCog, mdiLoading } from "@mdi/js";
+import { Icon } from "@/lib/icon";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Toast,
+  ToastDescription,
+  ToastProvider,
+  ToastTitle,
+  ToastViewport,
+} from "@/components/ui/toast";
+import { ConnectionGate } from "@/components/connection-gate";
+import { SettingsModal } from "@/components/settings-modal";
+import { WebhooksTab } from "@/components/webhooks/webhooks-tab";
+import { CacheTab } from "@/components/cache/cache-tab";
+import { EdgeSettingsTab } from "@/components/edge-settings/edge-settings-tab";
+import { useMarketplaceClient } from "@/src/utils/hooks/useMarketplaceClient";
+import { getSitecoreContextId } from "@/src/utils/sitecore-graphql";
+import {
+  loadEdgeCredentials,
+  saveEdgeCredentials,
+  hasCredentials,
+  needsSecretMigration,
+  apiSecret,
+  CREDENTIALS_VERSION,
+  type EdgeCredentials,
+} from "@/src/utils/sitecore-settings";
+import {
+  validateEdgeCredentials,
+  type EdgeApiCredentials,
+} from "@/src/utils/hooks/useEdgeApi";
+
+type ToastVariant = "default" | "success" | "error" | "warning";
+
+interface ToastState {
+  open: boolean;
+  title: string;
+  description?: string;
+  variant: ToastVariant;
+}
+
+/**
+ * Signs the user in for the /api/edge routes. The provider reads `window`, so
+ * it only mounts in the browser, never during prerendering. Non-blocking: the
+ * page renders right away; only Edge API calls wait for sign-in.
+ */
+function AuthBoundary({
+  appContext,
+  children,
+}: {
+  appContext?: ApplicationContext;
+  children: ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return <>{children}</>;
+  return (
+    <MarketplaceAuthProvider appContext={appContext} blocking={false}>
+      {children}
+    </MarketplaceAuthProvider>
+  );
+}
+
+export default function FullscreenExtension() {
+  const { client, error, isInitialized } = useMarketplaceClient();
+
+  const [appContext, setAppContext] = useState<ApplicationContext>();
+  const [contextId, setContextId] = useState<string>("");
+  const [credentials, setCredentials] = useState<EdgeCredentials | null>(null);
+  const [loadingCredentials, setLoadingCredentials] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [toast, setToast] = useState<ToastState>({
+    open: false,
+    title: "",
+    variant: "default",
+  });
+
+  const showToast = useCallback(
+    (title: string, description?: string, variant: ToastVariant = "default") => {
+      setToast({ open: true, title, description, variant });
+    },
+    [],
+  );
+
+  // Once the SDK is up: resolve the context id and load stored credentials
+  useEffect(() => {
+    if (!isInitialized || !client) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const ctxId = await getSitecoreContextId(client);
+        if (cancelled) return;
+        setContextId(ctxId);
+        client
+          .query("application.context")
+          .then((response) => {
+            if (!cancelled) setAppContext(response.data as ApplicationContext);
+          })
+          .catch(() => {
+            // Sign-in falls back to the stored organization without it.
+          });
+
+        const creds = await loadEdgeCredentials(client, ctxId);
+        if (cancelled) return;
+        setCredentials(creds);
+      } catch (err) {
+        console.error("Error loading app context/credentials:", err);
+        if (!cancelled) {
+          showToast(
+            "Failed to load settings",
+            "Could not read stored credentials from the content tree.",
+            "error",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingCredentials(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isInitialized, client, showToast]);
+
+  // Installs created before secrets were encrypted keep the plaintext in the
+  // content tree, and older ciphers aren't bound to their client ID. Re-seal
+  // on the server and rewrite the item, so only the current format exists
+  // anywhere.
+  useEffect(() => {
+    if (!client || !contextId || !credentials) return;
+    if (!needsSecretMigration(credentials)) return;
+
+    let cancelled = false;
+    (async () => {
+      const { clientId } = credentials;
+      const result = await validateEdgeCredentials({
+        clientId,
+        clientSecret: apiSecret(credentials),
+      });
+      if (cancelled) return;
+
+      if (!result.ok) {
+        showToast(
+          "Stored secret needs attention",
+          result.error === "encryption_unavailable"
+            ? "Set EDGE_SECRET_ENCRYPTION_KEY on the server so the stored client secret can be encrypted."
+            : "The stored credentials could not be re-validated and upgraded to the current encrypted format. Re-enter them in Settings.",
+          "warning",
+        );
+        return;
+      }
+
+      try {
+        await saveEdgeCredentials(client, contextId, {
+          clientId,
+          secretCipher: result.sealedSecret,
+        });
+        if (cancelled) return;
+        setCredentials({
+          version: CREDENTIALS_VERSION,
+          clientId,
+          secretCipher: result.sealedSecret,
+          updatedAt: new Date().toISOString(),
+        });
+        showToast(
+          "Client secret encrypted",
+          "The stored credentials were upgraded to the current encrypted format.",
+          "success",
+        );
+      } catch (err) {
+        console.error("Error encrypting stored credentials:", err);
+        if (!cancelled) {
+          showToast(
+            "Could not encrypt the stored secret",
+            "The settings item could not be rewritten. Re-enter the credentials in Settings.",
+            "warning",
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, contextId, credentials, showToast]);
+
+  const handleSaveCredentials = useCallback(
+    async (input: { clientId: string; secretCipher: string }) => {
+      if (!client || !contextId) return;
+      try {
+        await saveEdgeCredentials(client, contextId, input);
+        setCredentials({
+          version: CREDENTIALS_VERSION,
+          clientId: input.clientId,
+          secretCipher: input.secretCipher,
+          updatedAt: new Date().toISOString(),
+        });
+        showToast("Connected", "Credentials saved successfully.", "success");
+      } catch (err) {
+        console.error("Error saving credentials:", err);
+        showToast(
+          "Save failed",
+          "Could not persist the credentials to the content tree.",
+          "error",
+        );
+        throw err;
+      }
+    },
+    [client, contextId, showToast],
+  );
+
+  const handleAuthError = useCallback(() => {
+    showToast(
+      "Credentials rejected",
+      "The Experience Edge API rejected the stored credentials. Update them in Settings.",
+      "error",
+    );
+    setSettingsOpen(true);
+  }, [showToast]);
+
+  // The secret travels to our API routes sealed; the server unseals it.
+  const apiCredentials: EdgeApiCredentials | null =
+    credentials && hasCredentials(credentials)
+      ? { clientId: credentials.clientId, clientSecret: apiSecret(credentials) }
+      : null;
+
+  // ---- Render states ----
+
+  if (error) {
+    return (
+      <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
+        <div className="mx-auto max-w-[1280px]">
+          <div className="rounded-xl border border-danger bg-danger-bg p-6 text-danger-fg">
+            <h2 className="mb-1 font-bold">Failed to connect to Sitecore</h2>
+            <p className="text-sm">
+              The Marketplace SDK could not be initialized. Make sure this app is
+              opened from inside SitecoreAI. ({error.message})
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isInitialized || loadingCredentials) {
+    return (
+      <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
+        <div className="mx-auto flex max-w-[1280px] items-center justify-center py-32">
+          <div className="flex items-center gap-3 text-text-subtle">
+            <Icon path={mdiLoading} size={1} className="animate-spin" />
+            <span>Connecting to Sitecore&hellip;</span>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <AuthBoundary appContext={appContext}>
+    <ToastProvider swipeDirection="right">
+      <main className="p-(--spacing-margin-page) min-h-screen bg-surface-bright">
+        <div className="mx-auto max-w-[1280px] space-y-5">
+          <header className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/icon.svg"
+                alt=""
+                width={40}
+                height={40}
+                className="shrink-0"
+              />
+              <div>
+                <h1 className="text-lg font-bold text-on-surface">
+                  Experience Edge Console
+                </h1>
+                <p className="text-[11px] text-text-subtle">
+                  Manage webhooks, cache, and settings for this
+                  environment&apos;s Experience Edge.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open credential settings"
+            >
+              <Icon path={mdiCog} />
+            </Button>
+          </header>
+
+          {!apiCredentials ? (
+            <ConnectionGate onConfigure={() => setSettingsOpen(true)} />
+          ) : (
+            <Tabs defaultValue="webhooks">
+              <TabsList>
+                <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+                <TabsTrigger value="cache">Cache</TabsTrigger>
+                <TabsTrigger value="settings">Settings</TabsTrigger>
+              </TabsList>
+              <TabsContent value="webhooks">
+                <WebhooksTab
+                  credentials={apiCredentials}
+                  showToast={showToast}
+                  onAuthError={handleAuthError}
+                />
+              </TabsContent>
+              <TabsContent value="cache">
+                <CacheTab
+                  credentials={apiCredentials}
+                  showToast={showToast}
+                  onAuthError={handleAuthError}
+                />
+              </TabsContent>
+              <TabsContent value="settings">
+                <EdgeSettingsTab
+                  credentials={apiCredentials}
+                  showToast={showToast}
+                  onAuthError={handleAuthError}
+                />
+              </TabsContent>
+            </Tabs>
+          )}
+
+          <SettingsModal
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            initialClientId={credentials?.clientId ?? ""}
+            hasStoredSecret={Boolean(credentials && apiSecret(credentials))}
+            storedSecret={credentials ? apiSecret(credentials) : ""}
+            secretUpdatedAt={credentials?.updatedAt}
+            onSave={handleSaveCredentials}
+          />
+        </div>
+      </main>
+
+      <Toast
+        open={toast.open}
+        onOpenChange={(open) => setToast((t) => ({ ...t, open }))}
+        variant={toast.variant}
+        duration={5000}
+      >
+        <div className="flex flex-col gap-0.5">
+          <ToastTitle>{toast.title}</ToastTitle>
+          {toast.description && (
+            <ToastDescription>{toast.description}</ToastDescription>
+          )}
+        </div>
+      </Toast>
+      <ToastViewport />
+    </ToastProvider>
+    </AuthBoundary>
+  );
+}
