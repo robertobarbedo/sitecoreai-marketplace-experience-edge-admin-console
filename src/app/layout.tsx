@@ -1,6 +1,21 @@
 import type { Metadata } from "next";
-import { GoogleAnalytics } from "@/src/components/google-analytics";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+// Self-hosted at build time by next/font: visitors never request Google Fonts.
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+  variable: "--font-jetbrains-mono",
+});
 
 export const metadata: Metadata = {
   title: "Experience Edge Console",
@@ -13,15 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans text-sm antialiased overflow-x-hidden">
-        <GoogleAnalytics />
         {children}
       </body>
     </html>

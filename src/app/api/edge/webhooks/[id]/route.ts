@@ -5,6 +5,7 @@ import {
   edgeErrorResponse,
   jsonError,
 } from "@/src/lib/edge/request";
+import { audited, upstreamStatusOf } from "@/src/app/api/edge/audit";
 import type { Webhook, WebhookInput } from "@/src/types/edge";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -34,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function PUT(request: Request, context: RouteContext) {
   const auth = await readCredentials(request);
   if (!auth.ok) {
-    return auth.response;
+    return audited(request, "edge.webhook.update", auth.response);
   }
   const credentials = auth.credentials;
 
@@ -44,14 +45,22 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     input = (await request.json()) as WebhookInput;
   } catch {
-    return jsonError("validation", 400, { detail: "Invalid JSON body" });
+    return audited(
+      request,
+      "edge.webhook.update",
+      jsonError("validation", 400, { detail: "Invalid JSON body" }),
+    );
   }
 
   if (!input.uri || !input.uri.startsWith("https://")) {
-    return jsonError("validation", 400, {
-      field: "uri",
-      detail: "Webhook URI must use HTTPS",
-    });
+    return audited(
+      request,
+      "edge.webhook.update",
+      jsonError("validation", 400, {
+        field: "uri",
+        detail: "Webhook URI must use HTTPS",
+      }),
+    );
   }
 
   try {
@@ -64,16 +73,26 @@ export async function PUT(request: Request, context: RouteContext) {
       },
     );
     const webhook = await readEdgeResponse<Webhook>(response);
-    return NextResponse.json(webhook);
+    return audited(
+      request,
+      "edge.webhook.update",
+      NextResponse.json(webhook),
+      response.status,
+    );
   } catch (error) {
-    return edgeErrorResponse(error);
+    return audited(
+      request,
+      "edge.webhook.update",
+      edgeErrorResponse(error),
+      upstreamStatusOf(error),
+    );
   }
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
   const auth = await readCredentials(request);
   if (!auth.ok) {
-    return auth.response;
+    return audited(request, "edge.webhook.delete", auth.response);
   }
   const credentials = auth.credentials;
 
@@ -86,8 +105,18 @@ export async function DELETE(request: Request, context: RouteContext) {
       { method: "DELETE" },
     );
     await readEdgeResponse(response);
-    return new NextResponse(null, { status: 204 });
+    return audited(
+      request,
+      "edge.webhook.delete",
+      new NextResponse(null, { status: 204 }),
+      response.status,
+    );
   } catch (error) {
-    return edgeErrorResponse(error);
+    return audited(
+      request,
+      "edge.webhook.delete",
+      edgeErrorResponse(error),
+      upstreamStatusOf(error),
+    );
   }
 }

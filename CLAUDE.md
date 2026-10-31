@@ -74,6 +74,18 @@ it back to plain `fetch`.
   (master in content-publish-inspector) — keep it byte-identical. The page
   is wrapped in a non-blocking `MarketplaceAuthProvider` (`AuthBoundary` in
   page.tsx).
+- **Audit log**: the kit audit-logs every auth decision. Sensitive route
+  handlers (validate, cache, content, settings PUT, webhook POST/PUT/DELETE)
+  wrap every return in `audited()` from `src/app/api/edge/audit.ts` (event,
+  outcome, status, upstream status, sub/org). Never log secrets, tokens or
+  payloads. Audit calls live in the route handlers, not in `src/lib/edge/*`
+  (shared byte-identical with the webhooks app).
+- Marketplace SDK: `@sitecore-marketplace-sdk/client` ^0.4.1 and `/xmc`
+  ^0.4.4. No analytics. Fonts (Inter, JetBrains Mono) are self-hosted via
+  `next/font/google` in `layout.tsx` (CSS vars `--font-inter`,
+  `--font-jetbrains-mono`); never add a Google Fonts `<link>`.
+- Public docs: README, PRIVACY.md, DATA-USAGE.md, TERMS.md, SECURITY.md —
+  keep them in sync with the code. `rb205@proton.me` is a placeholder.
 - Browser → own Next.js `/api/edge/*` routes → OAuth token
   (`auth.sitecorecloud.io`, client_credentials, audience
   `https://api.sitecorecloud.io`) → Admin API

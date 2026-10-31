@@ -5,6 +5,7 @@ import {
   edgeErrorResponse,
   jsonError,
 } from "@/src/lib/edge/request";
+import { audited, upstreamStatusOf } from "@/src/app/api/edge/audit";
 import type { EdgeSettings } from "@/src/types/edge";
 
 export async function GET(request: Request) {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const auth = await readCredentials(request);
   if (!auth.ok) {
-    return auth.response;
+    return audited(request, "edge.settings.update", auth.response);
   }
   const credentials = auth.credentials;
 
@@ -36,7 +37,11 @@ export async function PUT(request: Request) {
   try {
     settings = (await request.json()) as EdgeSettings;
   } catch {
-    return jsonError("validation", 400, { detail: "Invalid JSON body" });
+    return audited(
+      request,
+      "edge.settings.update",
+      jsonError("validation", 400, { detail: "Invalid JSON body" }),
+    );
   }
 
   try {
@@ -45,8 +50,18 @@ export async function PUT(request: Request) {
       body: JSON.stringify(settings),
     });
     const updated = await readEdgeResponse<EdgeSettings>(response);
-    return NextResponse.json(updated ?? {});
+    return audited(
+      request,
+      "edge.settings.update",
+      NextResponse.json(updated ?? {}),
+      response.status,
+    );
   } catch (error) {
-    return edgeErrorResponse(error);
+    return audited(
+      request,
+      "edge.settings.update",
+      edgeErrorResponse(error),
+      upstreamStatusOf(error),
+    );
   }
 }

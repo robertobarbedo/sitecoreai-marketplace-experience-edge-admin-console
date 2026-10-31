@@ -5,6 +5,7 @@ import {
   edgeErrorResponse,
   jsonError,
 } from "@/src/lib/edge/request";
+import { audited, upstreamStatusOf } from "@/src/app/api/edge/audit";
 import type { Webhook, WebhookInput } from "@/src/types/edge";
 
 export async function GET(request: Request) {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await readCredentials(request);
   if (!auth.ok) {
-    return auth.response;
+    return audited(request, "edge.webhook.create", auth.response);
   }
   const credentials = auth.credentials;
 
@@ -36,14 +37,22 @@ export async function POST(request: Request) {
   try {
     input = (await request.json()) as WebhookInput;
   } catch {
-    return jsonError("validation", 400, { detail: "Invalid JSON body" });
+    return audited(
+      request,
+      "edge.webhook.create",
+      jsonError("validation", 400, { detail: "Invalid JSON body" }),
+    );
   }
 
   if (!input.uri || !input.uri.startsWith("https://")) {
-    return jsonError("validation", 400, {
-      field: "uri",
-      detail: "Webhook URI must use HTTPS",
-    });
+    return audited(
+      request,
+      "edge.webhook.create",
+      jsonError("validation", 400, {
+        field: "uri",
+        detail: "Webhook URI must use HTTPS",
+      }),
+    );
   }
 
   try {
@@ -52,8 +61,18 @@ export async function POST(request: Request) {
       body: JSON.stringify(input),
     });
     const webhook = await readEdgeResponse<Webhook>(response);
-    return NextResponse.json(webhook, { status: 201 });
+    return audited(
+      request,
+      "edge.webhook.create",
+      NextResponse.json(webhook, { status: 201 }),
+      response.status,
+    );
   } catch (error) {
-    return edgeErrorResponse(error);
+    return audited(
+      request,
+      "edge.webhook.create",
+      edgeErrorResponse(error),
+      upstreamStatusOf(error),
+    );
   }
 }

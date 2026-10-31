@@ -4,12 +4,13 @@ import {
   readCredentials,
   edgeErrorResponse,
 } from "@/src/lib/edge/request";
+import { audited, upstreamStatusOf } from "@/src/app/api/edge/audit";
 
 /** Clears the entire Experience Edge cache for the environment. */
 export async function DELETE(request: Request) {
   const auth = await readCredentials(request);
   if (!auth.ok) {
-    return auth.response;
+    return audited(request, "edge.cache.clear", auth.response);
   }
   const credentials = auth.credentials;
 
@@ -18,8 +19,18 @@ export async function DELETE(request: Request) {
       method: "DELETE",
     });
     await readEdgeResponse(response);
-    return new NextResponse(null, { status: 204 });
+    return audited(
+      request,
+      "edge.cache.clear",
+      new NextResponse(null, { status: 204 }),
+      response.status,
+    );
   } catch (error) {
-    return edgeErrorResponse(error);
+    return audited(
+      request,
+      "edge.cache.clear",
+      edgeErrorResponse(error),
+      upstreamStatusOf(error),
+    );
   }
 }

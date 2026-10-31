@@ -165,11 +165,11 @@ environment. For local work, copy `.env.example` to `.env.local`.
 | `EDGE_SECRET_ENCRYPTION_KEY` | Yes | **Server-only secret.** Passphrase (at least 16 characters) from which the AES-256-GCM key that seals the Client Secret is derived. Generate one with `openssl rand -base64 32`. Keep it stable: changing it makes every stored secret unreadable. Never prefix it with `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_AUTH0_CLIENT_ID` | Yes | Client ID of the app's Single-page app client credentials from the Cloud Portal. Without it, every `/api` route returns 500. |
 | `NEXT_PUBLIC_SITECORE_APP_ID` | Yes | Marketplace app ID, sent as `product_codes=mkp_<id>` at sign-in. |
-| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | No | Google Analytics 4 measurement ID (`G-XXXXXXXXXX`). Leave empty to disable analytics. |
 | `NEXT_PUBLIC_AUTH0_DOMAIN` | No | Defaults to `auth.sitecorecloud.io`. |
 | `NEXT_PUBLIC_AUTH0_AUDIENCE` | No | Defaults to `https://api-webapp.sitecorecloud.io`. |
 | `NEXT_PUBLIC_AUTH0_SCOPE` | No | Defaults to `openid profile email offline_access`. |
 | `AUTH0_ISSUER` | No | Token issuer checked on the server. Defaults to `https://<NEXT_PUBLIC_AUTH0_DOMAIN>/`. |
+| `CSP_FRAME_ANCESTORS` | No | Space-separated CSP sources allowed to embed the app in a frame (`Content-Security-Policy: frame-ancestors`). Defaults to `'self' https://*.sitecorecloud.io`. |
 
 `NEXT_PUBLIC_*` values are inlined at build time, so rebuild after changing
 them.
@@ -195,9 +195,9 @@ All configuration is in the settings dialog (the gear icon in the header).
   `/sitecore/system/Modules/ExperienceEdgeAdminConsole/Settings`. The next
   save always writes to the new path.
 - Older settings are upgraded automatically on load: a `version: 1` item with
-  a plaintext `clientSecret`, or a secret in the older unbound `v1.` format,
-  is re-sealed on the server and the item is rewritten. This erases the
-  plaintext.
+  a plaintext `clientSecret` is sealed on the server and the item is
+  rewritten. This erases the plaintext. Secrets sealed in the older `v1.` or
+  `v2.` formats are not migrated; enter the secret again.
 - Edge environment settings (cache TTLs, auto-clear) are not stored by the
   app. They are read from and written to Experience Edge directly.
 
@@ -214,18 +214,21 @@ All configuration is in the settings dialog (the gear icon in the header).
   1. The settings dialog posts it to `POST /api/edge/validate`.
   2. The server tests it against Experience Edge and returns it sealed:
      AES-256-GCM, key derived with HKDF-SHA256 from
-     `EDGE_SECRET_ENCRYPTION_KEY`, format `v2.<iv>.<tag>.<ciphertext>`
-     (base64url), with the Client ID as additional authenticated data.
+     `EDGE_SECRET_ENCRYPTION_KEY`, format `v3.<iv>.<tag>.<ciphertext>`
+     (base64url), with your Sitecore Cloud organization ID and the Client ID
+     as additional authenticated data.
   3. Only that sealed value is written to the Settings item, kept in browser
      memory, and sent in `x-edge-client-secret`. The server unseals it on each
      request.
 - **What this means:**
   - Anyone who can read the content tree, or a serialized or packaged copy of
     the item, cannot use the stored value without the deployment's key.
-  - A sealed value only opens together with the Client ID it was sealed for.
-  - The data routes accept only the sealed `v2.` form, and only from a
+  - A sealed value only opens for a signed-in user of the same organization,
+    together with the Client ID it was sealed for.
+  - The data routes accept only the sealed `v3.` form, and only from a
     signed-in user. `/api/edge/validate` is the one route that accepts a
-    plaintext or legacy secret, and it returns the sealed form.
+    plaintext secret, and it returns the sealed form. Older `v1.`/`v2.`
+    sealed values are refused; enter the secret again.
   - The secret cannot be read back through the UI. The dialog never prefills
     or reveals it, and only shows that a secret is stored and when it was
     last updated. If you change the Client ID you must enter the secret
@@ -242,11 +245,20 @@ All configuration is in the settings dialog (the gear icon in the header).
     webhook's own endpoint.
   - Sign-in goes to Sitecore Cloud's Auth0 tenant. Its refresh token and
     organization ID are kept in the browser's `localStorage`.
-  - If `NEXT_PUBLIC_GA_MEASUREMENT_ID` is set, Google Analytics receives page
-    views and an app-initialized event tagged `app_name:
-    experience-edge-console`. It receives no content, credentials or webhook
-    data.
-  - The page loads the Inter and JetBrains Mono fonts from Google Fonts.
+  - The Inter and JetBrains Mono fonts are self-hosted with the app (bundled
+    at build time), so the page makes no requests to Google Fonts.
+  - The app has no analytics or tracking.
+- **Security headers.** Every response carries HSTS,
+  `Content-Security-Policy: frame-ancestors` (from `CSP_FRAME_ANCESTORS`),
+  `X-Content-Type-Options: nosniff`, a `Referrer-Policy` and a
+  `Permissions-Policy`. `/api` responses are sent with
+  `Cache-Control: no-store`.
+- **Audit log.** Every sign-in decision on the `/api` routes, and every
+  sensitive operation (secret validation and sealing, cache clear, delete
+  all content, settings changes, webhook create, update and delete), is
+  written as a JSON line with a UTC timestamp to the server log: event,
+  outcome, HTTP and upstream status, and the caller's user and organization
+  IDs. Audit lines contain no tokens, secrets, settings or webhook content.
 - **SSRF protection on webhook tests.** The test route reads the target from
   the Admin API by webhook ID, so the browser cannot supply an arbitrary URL.
   The request itself is restricted to:
@@ -255,6 +267,10 @@ All configuration is in the settings dialog (the gear icon in the header).
     rebinding cannot swap in an internal address;
   - no redirects followed, a 15-second timeout, and the response body capped
     at 4,000 characters.
+
+- **Policies.** See the [Privacy policy](PRIVACY.md),
+  [Terms of service](TERMS.md), [Data usage disclosure](DATA-USAGE.md) and
+  [Security policy](SECURITY.md).
 
 ## Limitations
 
@@ -292,7 +308,13 @@ All configuration is in the settings dialog (the gear icon in the header).
 
 ## Support
 
-Report bugs and request features by opening an issue in this repository.
+Report bugs and request features in
+[GitHub Issues](https://github.com/robertobarbedo/sitecoreai-marketplace-experience-edge-admin-console/issues).
+Report security vulnerabilities as described in the
+[Security policy](SECURITY.md), not in a public issue. See also the
+[Privacy policy](PRIVACY.md), [Terms of service](TERMS.md) and
+[Data usage disclosure](DATA-USAGE.md).
+
 This is a community app and is not an official Sitecore product.
 
 ## License
