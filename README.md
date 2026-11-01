@@ -135,7 +135,7 @@ one of:
 5. Under API access, enable **SitecoreAI APIs**.
 6. No extra permissions (such as clipboard access) are needed.
 7. Set the deployment URL to `https://<your-deployment>/`.
-8. Upload [`public/icon.svg`](public/icon.svg) as the app logo.
+8. Upload [`public/drone-duotone.svg`](public/drone-duotone.svg) as the app logo.
 9. Set up custom authorization: create **Single-page app** client
    credentials for the app. Register your deployment origin (for example
    `https://<your-deployment>`, no path) as the allowed callback URL (with a
