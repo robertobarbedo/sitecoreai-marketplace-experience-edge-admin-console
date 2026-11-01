@@ -319,4 +319,4 @@ This is a community app and is not an official Sitecore product.
 
 ## License
 
-Licensed under the Apache License 2.0. See [LICENSE](LICENSE)..
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE).

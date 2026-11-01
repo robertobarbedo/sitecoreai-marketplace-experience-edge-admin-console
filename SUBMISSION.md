@@ -1,7 +1,7 @@
 # Marketplace submission: Experience Edge Console
 
 Copy-paste text for Sitecore's public-app submission form, in form order.
-Replace every `{{...}}` placeholder before submitting.
+Replace `{{APP_URL}}` with the production deployment URL before submitting.
 
 ## 1. App name
 
@@ -65,7 +65,7 @@ PNG, shown as 600×900 thumbnails. Capture during live QA.
 
 ## 8. Data usage disclosure
 
-Paste from `DATA-USAGE.md` (replace `rb205@proton.me` in it first).
+Paste from `DATA-USAGE.md`.
 
 Summary: the Edge administration Client ID and the sealed Client Secret are stored in one settings item in the customer's own content tree, written through the Marketplace SDK with the user's permissions. Requests go from the browser to the app's own signed-in API routes and from there only to `auth.sitecorecloud.io` and `edge.sitecorecloud.io` (and, for a webhook test, to that webhook's own endpoint); nothing is persisted server-side. Server audit logs (no tokens, secrets, settings or webhook content) are kept for 90 days.
 
@@ -114,4 +114,4 @@ Next.js lists sharp (LGPL-3.0 libvips) as an optional dependency for image optim
 - [ ] `NEXT_PUBLIC_AUTH0_CLIENT_ID`, `NEXT_PUBLIC_SITECORE_APP_ID` and `EDGE_SECRET_ENCRYPTION_KEY` set on the production host; app rebuilt
 - [ ] Production client credentials registered with `{{APP_URL}}` callback, logout, web origin and CORS URLs
 - [ ] Screenshots captured (PNG), with no real Client ID/secret or webhook URLs visible
-- [ ] `rb205@proton.me` replaced in DATA-USAGE.md, PRIVACY.md, TERMS.md, SECURITY.md; `Roberto Barbedo`, `rb205@proton.me`, `{{APP_URL}}` replaced in this form
+- [ ] `{{APP_URL}}` replaced with the production deployment URL in this form
