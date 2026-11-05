@@ -85,7 +85,7 @@ it back to plain `fetch`.
   `next/font/google` in `layout.tsx` (CSS vars `--font-inter`,
   `--font-jetbrains-mono`); never add a Google Fonts `<link>`.
 - Public docs: README, PRIVACY.md, DATA-USAGE.md, TERMS.md, SECURITY.md —
-  keep them in sync with the code. `rb205@proton.me` is a placeholder.
+  keep them in sync with the code. The contact address is `roberto.barbedo@msqdx.com`.
 - Browser → own Next.js `/api/edge/*` routes → OAuth token
   (`auth.sitecorecloud.io`, client_credentials, audience
   `https://api.sitecorecloud.io`) → Admin API
